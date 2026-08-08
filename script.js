@@ -1,16 +1,22 @@
 // ============================================
 // Gerenciador de Códigos - Lanchonete
-// Versão com leitura/escrita direta do arquivo
+// Versão com Google Sheets API
 // ============================================
 
 class ProductManager {
     constructor() {
+        // Configuração da planilha Google
+        this.SHEET_ID = '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54';
+        this.SHEET_NAME = 'Sheet1'; // Nome da aba
+        this.API_KEY = ''; // Opcional, para leitura pública
+        this.CLIENT_ID = ''; // Necessário para escrita
+        this.ACCESS_TOKEN = ''; // Token de acesso OAuth
+        
         // Estado da aplicação
         this.products = [];
         this.currentHoleIndex = -1;
         this.holes = [];
-        this.fileName = 'CodigoLanchonete.xlsx';
-        this.isFileLoaded = false;
+        this.isAuthenticated = false;
         
         // Elementos DOM
         this.initializeDOM();
@@ -18,12 +24,17 @@ class ProductManager {
         // Event Listeners
         this.setupEventListeners();
         
-        // Carregar arquivo automaticamente
-        this.loadDefaultFile();
+        // Verificar autenticação
+        this.checkAuth();
     }
 
     // Inicializa referências aos elementos DOM
     initializeDOM() {
+        // Autenticação
+        this.authSection = document.getElementById('authSection');
+        this.authButton = document.getElementById('authButton');
+        this.authStatus = document.getElementById('authStatus');
+        
         // Status do arquivo
         this.uploadBox = document.getElementById('uploadBox');
         this.fileInput = document.getElementById('fileInput');
@@ -62,6 +73,11 @@ class ProductManager {
 
     // Configura todos os event listeners
     setupEventListeners() {
+        // Autenticação
+        if (this.authButton) {
+            this.authButton.addEventListener('click', () => this.authenticate());
+        }
+        
         // Upload manual (fallback)
         this.uploadBtn.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
@@ -92,109 +108,224 @@ class ProductManager {
         // Salvar novo produto
         this.saveNewBtn.addEventListener('click', () => this.saveNewProduct());
         
-        // Exportar/Download
+        // Exportar/Download (fallback)
         this.exportBtn.addEventListener('click', () => this.downloadExcel());
         
         // Tabs
         this.tabBtns.forEach(btn => {
             btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
         });
-        
-        // Auto-save antes de fechar
-        window.addEventListener('beforeunload', (e) => {
-            if (this.hasUnsavedChanges()) {
-                this.saveToLocalStorage();
-                this.downloadExcelSilent();
-            }
-        });
     }
 
-    // Carrega o arquivo padrão da pasta raiz
-    async loadDefaultFile() {
-        try {
-            // Tenta carregar o arquivo da mesma pasta
-            const response = await fetch(this.fileName);
-            
-            if (!response.ok) {
-                throw new Error('Arquivo não encontrado');
-            }
-            
-            const arrayBuffer = await response.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-            
-            // Processa o arquivo
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-            
-            this.parseData(jsonData);
-            this.isFileLoaded = true;
-            this.showSuccessMessage();
-            
-        } catch (error) {
-            console.warn('Arquivo padrão não encontrado:', error);
-            this.showFileNotFound();
-            
-            // Tenta carregar do localStorage como fallback
+    // Verifica autenticação
+    checkAuth() {
+        // Verifica se há token salvo
+        const token = localStorage.getItem('googleAccessToken');
+        if (token) {
+            this.ACCESS_TOKEN = token;
+            this.isAuthenticated = true;
+            this.updateAuthUI(true);
+            this.loadGoogleSheet();
+        } else {
+            this.updateAuthUI(false);
+            // Carrega do localStorage como fallback
             this.loadFromLocalStorage();
         }
     }
 
-    // Mostra mensagem de sucesso
-    showSuccessMessage() {
-        this.fileInfo.style.display = 'block';
-        this.totalProducts.textContent = this.products.length;
-        
-        // Remove mensagem de erro se existir
-        const errorMsg = document.querySelector('.warning-message');
-        if (errorMsg) {
-            errorMsg.remove();
-        }
-        
-        // Atualiza upload box
-        this.uploadBox.querySelector('h3').textContent = '📁 Arquivo Carregado';
-        this.uploadBox.querySelector('p').textContent = 'CodigoLanchonete.xlsx';
-        
-        const hint = this.uploadBox.querySelector('.upload-hint');
-        if (hint) {
-            hint.textContent = 'As alterações serão salvas automaticamente no arquivo';
+    // Atualiza UI de autenticação
+    updateAuthUI(authenticated) {
+        if (this.authStatus) {
+            if (authenticated) {
+                this.authStatus.innerHTML = '✅ Conectado ao Google Sheets';
+                this.authStatus.style.color = '#4CAF50';
+                if (this.authButton) {
+                    this.authButton.textContent = '🔄 Reconectar';
+                    this.authButton.className = 'btn btn-secondary';
+                }
+            } else {
+                this.authStatus.innerHTML = '⚠️ Não conectado - Clique para autenticar';
+                this.authStatus.style.color = '#ff9800';
+                if (this.authButton) {
+                    this.authButton.textContent = '🔑 Conectar Google';
+                    this.authButton.className = 'btn btn-primary';
+                }
+            }
         }
     }
 
-    // Mostra arquivo não encontrado
-    showFileNotFound() {
-        const uploadBox = this.uploadBox;
+    // Autenticação OAuth 2.0
+    async authenticate() {
+        // Configuração OAuth (substitua com suas credenciais)
+        const CLIENT_ID = 'SEU_CLIENT_ID.apps.googleusercontent.com';
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
+        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
         
-        // Verifica se já existe mensagem
-        if (!document.querySelector('.warning-message')) {
-            const warning = document.createElement('div');
-            warning.className = 'warning-message';
-            warning.innerHTML = `
-                ⚠️ Arquivo <strong>CodigoLanchonete.xlsx</strong> não encontrado na pasta raiz.<br>
-                Faça upload manual de um arquivo ou crie o arquivo na mesma pasta do site.
-            `;
-            uploadBox.appendChild(warning);
+        // Gera URL de autenticação
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+            `client_id=${CLIENT_ID}&` +
+            `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
+            `response_type=token&` +
+            `scope=${encodeURIComponent(SCOPES)}&` +
+            `prompt=consent`;
+        
+        // Verifica se já retornou com token
+        const hash = window.location.hash;
+        if (hash) {
+            const params = new URLSearchParams(hash.substring(1));
+            const accessToken = params.get('access_token');
+            
+            if (accessToken) {
+                this.ACCESS_TOKEN = accessToken;
+                localStorage.setItem('googleAccessToken', accessToken);
+                this.isAuthenticated = true;
+                
+                // Limpa URL
+                window.location.hash = '';
+                
+                this.updateAuthUI(true);
+                await this.loadGoogleSheet();
+            }
+        } else {
+            // Redireciona para autenticação
+            window.location.href = authUrl;
+        }
+    }
+
+    // Carrega dados da planilha Google
+    async loadGoogleSheet() {
+        if (!this.isAuthenticated || !this.ACCESS_TOKEN) {
+            console.log('Não autenticado, usando cache local');
+            return;
         }
         
-        uploadBox.querySelector('h3').textContent = '📤 Upload Manual';
-        uploadBox.querySelector('p').textContent = 'Arquivo padrão não encontrado';
+        try {
+            const response = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A:C`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.ACCESS_TOKEN}`
+                    }
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error('Erro ao carregar planilha');
+            }
+            
+            const data = await response.json();
+            
+            if (data.values && data.values.length > 1) {
+                this.products = [];
+                
+                // Pula cabeçalho
+                for (let i = 1; i < data.values.length; i++) {
+                    const row = data.values[i];
+                    if (row && row.length >= 3 && row[0] && !isNaN(row[0])) {
+                        this.products.push({
+                            codigo: parseInt(row[0]),
+                            descricao: row[1] || '',
+                            un: row[2] || 'UN'
+                        });
+                    }
+                }
+                
+                this.products.sort((a, b) => a.codigo - b.codigo);
+                this.updateAfterLoad();
+            }
+            
+        } catch (error) {
+            console.error('Erro ao carregar planilha:', error);
+            alert('Erro ao conectar com Google Sheets. Usando dados locais.');
+            this.loadFromLocalStorage();
+        }
+    }
+
+    // Salva dados na planilha Google
+    async saveToGoogleSheet() {
+        if (!this.isAuthenticated || !this.ACCESS_TOKEN) {
+            alert('Autenticação necessária. Clique em "Conectar Google".');
+            return false;
+        }
         
-        const hint = uploadBox.querySelector('.upload-hint');
+        try {
+            // Prepara dados para enviar
+            const values = [
+                ['Código', 'Descrição', 'UN'],
+                ...this.products.map(p => [p.codigo.toString(), p.descricao, p.un])
+            ];
+            
+            // Limpa planilha existente
+            await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A:C:clear`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.ACCESS_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            
+            // Escreve novos dados
+            const response = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A1:C${values.length}?valueInputOption=RAW`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${this.ACCESS_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        values: values
+                    })
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error('Erro ao salvar');
+            }
+            
+            this.showNotification('✅ Planilha atualizada com sucesso!');
+            return true;
+            
+        } catch (error) {
+            console.error('Erro ao salvar:', error);
+            alert('Erro ao salvar na planilha. Tente novamente.');
+            return false;
+        }
+    }
+
+    // Atualiza interface após carregar
+    updateAfterLoad() {
+        this.fileInfo.style.display = 'block';
+        this.totalProducts.textContent = this.products.length;
+        
+        this.uploadBox.querySelector('h3').textContent = '☁️ Google Sheets Conectado';
+        this.uploadBox.querySelector('p').textContent = 'Dados carregados da nuvem';
+        
+        const hint = this.uploadBox.querySelector('.upload-hint');
         if (hint) {
-            hint.textContent = 'Formatos aceitos: CSV, XLS, XLSX';
+            hint.textContent = 'Alterações salvas automaticamente na nuvem';
         }
+        
+        this.findNextBtn.disabled = false;
+        this.exportBtn.disabled = false;
+        
+        this.findAllHoles();
+        this.renderTable();
+        this.saveToLocalStorage();
     }
 
     // Processa upload manual
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (file) {
-            this.fileName = file.name;
             this.processFile(file);
         }
     }
 
-    // Processa arquivo (comum para todos os métodos)
+    // Processa arquivo
     processFile(file) {
         const reader = new FileReader();
         
@@ -206,11 +337,8 @@ class ProductManager {
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                 
                 this.parseData(jsonData);
-                this.isFileLoaded = true;
-                this.showSuccessMessage();
-                
             } catch (error) {
-                alert('Erro ao ler o arquivo. Verifique se é um formato válido (CSV, XLS, XLSX).');
+                alert('Erro ao ler arquivo.');
                 console.error('Erro:', error);
             }
         };
@@ -218,16 +346,15 @@ class ProductManager {
         reader.readAsArrayBuffer(file);
     }
 
-    // Converte os dados brutos para o formato interno
+    // Converte dados brutos
     parseData(rawData) {
         if (!rawData || rawData.length < 2) {
-            alert('A planilha está vazia ou não possui dados suficientes.');
+            alert('Planilha vazia.');
             return;
         }
 
         this.products = [];
         
-        // Pula a primeira linha (cabeçalho)
         for (let i = 1; i < rawData.length; i++) {
             const row = rawData[i];
             if (row && row.length >= 3 && row[0] && !isNaN(row[0])) {
@@ -239,38 +366,38 @@ class ProductManager {
             }
         }
 
-        if (this.products.length === 0) {
-            alert('Nenhum produto válido encontrado na planilha.');
-            return;
-        }
-
-        // Ordena por código
         this.products.sort((a, b) => a.codigo - b.codigo);
-        
-        // Atualiza interface
         this.updateAfterUpload();
     }
 
-    // Atualiza interface após upload
+    // Atualiza após upload manual
     updateAfterUpload() {
+        this.fileInfo.style.display = 'block';
         this.totalProducts.textContent = this.products.length;
         
-        // Habilita botões
+        this.uploadBox.querySelector('h3').textContent = '📁 Arquivo Local';
+        this.uploadBox.querySelector('p').textContent = 'Dados carregados do arquivo';
+        
         this.findNextBtn.disabled = false;
         this.exportBtn.disabled = false;
         
-        // Encontra todos os buracos
         this.findAllHoles();
-        
-        // Salva no localStorage como cache
+        this.renderTable();
         this.saveToLocalStorage();
         
-        // Atualiza tabela se estiver visível
-        this.renderTable();
+        // Tenta salvar na nuvem se autenticado
+        if (this.isAuthenticated) {
+            this.saveToGoogleSheet();
+        }
     }
 
-    // Gera o Excel para download
-    generateExcel() {
+    // Download Excel (fallback)
+    downloadExcel() {
+        if (this.products.length === 0) {
+            alert('Não há produtos para exportar.');
+            return;
+        }
+        
         const exportData = [
             ['Código', 'Descrição', 'UN'],
             ...this.products.map(p => [p.codigo, p.descricao, p.un])
@@ -280,130 +407,49 @@ class ProductManager {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
         
-        return wb;
+        XLSX.writeFile(wb, 'CodigoLanchonete.xlsx');
     }
 
-    // Download do Excel (visível para o usuário)
-    downloadExcel() {
-        if (this.products.length === 0) {
-            alert('Não há produtos para exportar.');
-            return;
-        }
-        
-        const wb = this.generateExcel();
-        XLSX.writeFile(wb, this.fileName);
-        
-        // Mostra mensagem
-        this.showSaveConfirmation();
-    }
-
-    // Download silencioso (auto-save)
-    downloadExcelSilent() {
-        if (this.products.length === 0) return;
-        
-        try {
-            const wb = this.generateExcel();
-            XLSX.writeFile(wb, this.fileName);
-        } catch (error) {
-            console.warn('Auto-save falhou:', error);
-        }
-    }
-
-    // Mostra confirmação de salvamento
-    showSaveConfirmation() {
-        // Cria elemento de notificação
-        const notification = document.createElement('div');
-        notification.className = 'save-notification';
-        notification.innerHTML = '✅ Arquivo salvo com sucesso!';
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #4CAF50;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 1000;
-            animation: slideIn 0.3s ease, fadeOut 0.5s ease 2s forwards;
-            font-weight: 600;
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Remove após animação
-        setTimeout(() => {
-            notification.remove();
-        }, 3000);
-        
-        // Adiciona estilos de animação se não existirem
-        if (!document.getElementById('notification-styles')) {
-            const style = document.createElement('style');
-            style.id = 'notification-styles';
-            style.textContent = `
-                @keyframes slideIn {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-                @keyframes fadeOut {
-                    from { opacity: 1; }
-                    to { opacity: 0; }
-                }
-            `;
-            document.head.appendChild(style);
-        }
-    }
-
-    // Verifica se há alterações não salvas
-    hasUnsavedChanges() {
-        const savedData = localStorage.getItem('productData');
-        if (!savedData) return true;
-        
-        try {
-            const savedProducts = JSON.parse(savedData);
-            return JSON.stringify(this.products) !== JSON.stringify(savedProducts);
-        } catch {
-            return true;
-        }
-    }
-
-    // Salva no localStorage (cache)
+    // Salva no localStorage
     saveToLocalStorage() {
         try {
             localStorage.setItem('productData', JSON.stringify(this.products));
         } catch (error) {
-            console.warn('Não foi possível salvar no localStorage:', error);
+            console.warn('Erro ao salvar cache local:', error);
         }
     }
 
-    // Carrega do localStorage (fallback)
+    // Carrega do localStorage
     loadFromLocalStorage() {
         try {
             const savedData = localStorage.getItem('productData');
             if (savedData) {
                 this.products = JSON.parse(savedData);
                 this.products.sort((a, b) => a.codigo - b.codigo);
-                this.updateAfterUpload();
-                this.isFileLoaded = true;
                 
-                console.log('Dados carregados do cache local');
-                
-                // Atualiza interface
                 this.fileInfo.style.display = 'block';
-                this.uploadBox.querySelector('h3').textContent = '💾 Dados em Cache';
-                this.uploadBox.querySelector('p').textContent = 'Usando dados salvos localmente';
+                this.totalProducts.textContent = this.products.length;
+                
+                this.uploadBox.querySelector('h3').textContent = '💾 Dados Locais';
+                this.uploadBox.querySelector('p').textContent = 'Usando cache do navegador';
                 
                 const hint = this.uploadBox.querySelector('.upload-hint');
                 if (hint) {
-                    hint.textContent = 'Faça upload de um arquivo para atualizar';
+                    hint.textContent = 'Conecte ao Google Sheets para salvar na nuvem';
                 }
+                
+                this.findNextBtn.disabled = false;
+                this.exportBtn.disabled = false;
+                
+                this.findAllHoles();
+                this.renderTable();
             }
         } catch (error) {
-            console.warn('Não foi possível carregar do localStorage:', error);
+            console.warn('Erro ao carregar cache:', error);
         }
     }
 
-    // Encontra todos os buracos na sequência
+    // Encontra buracos
     findAllHoles() {
         this.holes = [];
         this.currentHoleIndex = -1;
@@ -424,10 +470,10 @@ class ProductManager {
         }
     }
 
-    // Encontra o próximo buraco
+    // Próximo buraco
     findNextHole() {
-        if (!this.isFileLoaded || this.products.length === 0) {
-            alert('Carregue um arquivo primeiro!');
+        if (this.products.length === 0) {
+            alert('Carregue os dados primeiro!');
             return;
         }
         
@@ -438,7 +484,6 @@ class ProductManager {
         }
         
         this.currentHoleIndex++;
-        
         if (this.currentHoleIndex >= this.holes.length) {
             this.currentHoleIndex = 0;
         }
@@ -446,7 +491,7 @@ class ProductManager {
         this.displayCurrentHole();
     }
 
-    // Exibe o buraco atual
+    // Exibe buraco atual
     displayCurrentHole() {
         if (this.currentHoleIndex < 0 || this.currentHoleIndex >= this.holes.length) {
             return;
@@ -473,8 +518,8 @@ class ProductManager {
         this.noResults.style.display = 'none';
     }
 
-    // Salva um novo produto
-    saveNewProduct() {
+    // Salva novo produto
+    async saveNewProduct() {
         if (this.currentHoleIndex < 0) {
             alert('Nenhum buraco selecionado.');
             return;
@@ -484,34 +529,32 @@ class ProductManager {
         const un = this.newUN.value.trim();
         
         if (!descricao) {
-            alert('Por favor, informe a descrição do produto.');
+            alert('Informe a descrição.');
             return;
         }
         
         if (!un) {
-            alert('Por favor, informe a unidade de medida.');
+            alert('Informe a unidade.');
             return;
         }
         
         const hole = this.holes[this.currentHoleIndex];
         
-        const newProduct = {
+        this.products.push({
             codigo: hole.missingCode,
             descricao: descricao.toUpperCase(),
             un: un.toUpperCase()
-        };
+        });
         
-        this.products.push(newProduct);
         this.products.sort((a, b) => a.codigo - b.codigo);
-        
         this.findAllHoles();
         this.updateAfterSave();
         
-        // Auto-download do arquivo atualizado
-        this.downloadExcel();
+        // Salva na nuvem
+        await this.saveToGoogleSheet();
     }
 
-    // Atualiza interface após salvar
+    // Atualiza após salvar
     updateAfterSave() {
         this.renderTable();
         this.totalProducts.textContent = this.products.length;
@@ -528,19 +571,15 @@ class ProductManager {
         }
     }
 
-    // Reinicia a pesquisa
+    // Reinicia pesquisa
     resetSearch() {
         this.currentHoleIndex = -1;
         this.findAllHoles();
         this.resultsContainer.style.display = 'none';
         this.noResults.style.display = 'none';
-        
-        if (this.holes.length > 0) {
-            this.findNextBtn.disabled = false;
-        }
     }
 
-    // Renderiza a tabela de produtos
+    // Renderiza tabela
     renderTable() {
         this.tableBody.innerHTML = '';
         
@@ -578,12 +617,12 @@ class ProductManager {
         this.setupEditListeners();
     }
 
-    // Configura listeners para edição inline
+    // Edit listeners
     setupEditListeners() {
         const editableCells = document.querySelectorAll('.editable');
         
         editableCells.forEach(cell => {
-            cell.addEventListener('click', (e) => {
+            cell.addEventListener('click', async (e) => {
                 const field = cell.dataset.field;
                 const index = parseInt(cell.dataset.index);
                 const currentValue = this.products[index][field];
@@ -597,45 +636,69 @@ class ProductManager {
                 cell.appendChild(input);
                 input.focus();
                 
-                const saveEdit = () => {
+                const saveEdit = async () => {
                     const newValue = input.value.trim();
                     if (newValue && newValue !== currentValue) {
                         this.products[index][field] = newValue.toUpperCase();
                         this.saveToLocalStorage();
                         this.renderTable();
                         
-                        // Auto-download
-                        this.downloadExcel();
+                        // Salva na nuvem
+                        await this.saveToGoogleSheet();
                     } else {
                         cell.textContent = currentValue;
                     }
                 };
                 
                 input.addEventListener('blur', saveEdit);
-                input.addEventListener('keypress', (e) => {
+                input.addEventListener('keypress', async (e) => {
                     if (e.key === 'Enter') {
-                        saveEdit();
+                        await saveEdit();
                     }
                 });
             });
         });
     }
 
-    // Deleta um produto
-    deleteProduct(index) {
-        if (confirm('Tem certeza que deseja excluir este produto?')) {
+    // Deleta produto
+    async deleteProduct(index) {
+        if (confirm('Excluir este produto?')) {
             this.products.splice(index, 1);
             this.findAllHoles();
             this.renderTable();
             this.totalProducts.textContent = this.products.length;
             this.saveToLocalStorage();
             
-            // Auto-download
-            this.downloadExcel();
+            // Salva na nuvem
+            await this.saveToGoogleSheet();
         }
     }
 
-    // Alterna entre abas
+    // Notificação
+    showNotification(message) {
+        const notification = document.createElement('div');
+        notification.className = 'save-notification';
+        notification.innerHTML = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease, fadeOut 0.5s ease 2s forwards;
+            font-weight: 600;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => notification.remove(), 3000);
+    }
+
+    // Alterna abas
     switchTab(tabId) {
         this.tabBtns.forEach(btn => btn.classList.remove('active'));
         this.tabContents.forEach(content => content.classList.remove('active'));
@@ -654,30 +717,7 @@ class ProductManager {
     }
 }
 
-// ============================================
-// INICIALIZAÇÃO
-// ============================================
+// Inicialização
 document.addEventListener('DOMContentLoaded', () => {
     window.productManager = new ProductManager();
-    
-    // Adiciona botão de salvamento manual no header
-    const header = document.querySelector('.header');
-    const saveButtonContainer = document.createElement('div');
-    saveButtonContainer.style.cssText = `
-        margin-top: 15px;
-        position: relative;
-        z-index: 1;
-    `;
-    
-    const saveButton = document.createElement('button');
-    saveButton.className = 'btn btn-success';
-    saveButton.innerHTML = '💾 Salvar Arquivo Agora';
-    saveButton.onclick = () => {
-        if (window.productManager && window.productManager.products.length > 0) {
-            window.productManager.downloadExcel();
-        }
-    };
-    
-    saveButtonContainer.appendChild(saveButton);
-    header.appendChild(saveButtonContainer);
 });
