@@ -1,12 +1,12 @@
 /* ============================================ */
 /* Gerenciador de Códigos - Lanchonete         */
-/* Design System Completo                      */
+/* Design System Completo - Google Sheets      */
 /* ============================================ */
 
 /* Reset e Variáveis */
 :root {
     --primary-color: #4CAF50;
-    --primary-dark: #45a049;
+    --primary-dark: #388E3C;
     --primary-light: #81C784;
     --secondary-color: #2196F3;
     --secondary-dark: #1976D2;
@@ -72,7 +72,6 @@ body {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xl);
     overflow: hidden;
-    backdrop-filter: blur(10px);
 }
 
 /* ============================================ */
@@ -115,6 +114,34 @@ body {
     letter-spacing: 0.5px;
     position: relative;
     z-index: 1;
+}
+
+/* ============================================ */
+/* AUTENTICAÇÃO GOOGLE                         */
+/* ============================================ */
+.auth-container {
+    background: white;
+    padding: 15px 30px;
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+}
+
+.auth-info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#authStatus {
+    font-weight: 500;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 /* ============================================ */
@@ -263,12 +290,6 @@ body {
     opacity: 1;
 }
 
-.upload-box.dragover {
-    border-color: var(--primary-color);
-    background: rgba(76, 175, 80, 0.05);
-    transform: scale(1.02);
-}
-
 .upload-icon {
     font-size: 4em;
     margin-bottom: 20px;
@@ -337,66 +358,13 @@ body {
     font-size: 1.2em;
 }
 
-/* ============================================ */
-/* BOTÕES DE ARQUIVO                           */
-/* ============================================ */
-.file-buttons {
-    display: flex;
-    gap: 12px;
-    margin-top: 18px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.file-buttons .btn {
-    font-size: 0.95em;
-    padding: 12px 24px;
-}
-
-/* ============================================ */
-/* INDICADOR DE ALTERAÇÕES NÃO SALVAS         */
-/* ============================================ */
-.unsaved-indicator {
-    background: linear-gradient(135deg, #fff3cd, #ffe69c);
-    color: #856404;
-    padding: 12px 20px;
-    border-radius: var(--radius);
-    margin: 15px 0;
-    text-align: center;
-    font-weight: 600;
-    border: 2px solid #ffc107;
-    box-shadow: var(--shadow-sm);
-    animation: pulse 2s infinite;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-
-@keyframes pulse {
-    0% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.85;
-        transform: scale(1.02);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-.warning-message {
-    background: #fff3cd;
-    color: #856404;
-    padding: 12px 18px;
+.sync-status {
+    margin-top: 10px;
+    padding: 8px 15px;
     border-radius: var(--radius-sm);
-    margin-top: 12px;
     font-size: 0.9em;
-    border: 1px solid #ffc107;
-    line-height: 1.5;
+    font-weight: 500;
+    display: inline-block;
 }
 
 /* ============================================ */
@@ -476,7 +444,7 @@ body {
 }
 
 .btn-success:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--primary-dark), #388E3C);
+    background: linear-gradient(135deg, var(--primary-dark), #2E7D32);
 }
 
 .btn-danger {
@@ -579,20 +547,43 @@ body {
 
 .product-info {
     display: grid;
-    gap: 12px;
+    gap: 10px;
     margin-top: 12px;
 }
 
-.product-info strong {
+.info-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+}
+
+.info-row strong {
     color: var(--text-color);
     min-width: 100px;
     display: inline-block;
+}
+
+.highlight-code {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: var(--warning-color);
+    background: #fff3e0;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--warning-color);
 }
 
 .insert-form {
     display: grid;
     gap: 12px;
     margin-top: 15px;
+}
+
+.insert-form label {
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 0.9em;
 }
 
 .insert-form input {
@@ -623,10 +614,27 @@ body {
     animation: fadeIn 0.5s ease;
 }
 
+.no-results-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.no-results-icon {
+    font-size: 4em;
+}
+
 .no-results p {
     font-size: 1.3em;
     color: var(--success-color);
     font-weight: 500;
+}
+
+.no-results-subtitle {
+    font-size: 1em !important;
+    color: var(--text-light) !important;
+    font-weight: 400 !important;
 }
 
 /* ============================================ */
@@ -649,6 +657,7 @@ body {
     box-shadow: var(--shadow);
     overflow: hidden;
     border: 1px solid var(--border-color);
+    margin-bottom: 15px;
 }
 
 .table-container::-webkit-scrollbar {
@@ -756,7 +765,94 @@ tbody tr:last-child td {
     color: var(--text-light);
     padding: 50px !important;
     font-size: 1.1em;
-    font-style: italic;
+}
+
+.table-info {
+    text-align: right;
+    color: var(--text-light);
+    font-size: 0.9em;
+    padding: 0 5px;
+}
+
+.table-info span {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* ============================================ */
+/* FOOTER                                      */
+/* ============================================ */
+.footer {
+    background: white;
+    padding: 20px;
+    text-align: center;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-light);
+}
+
+.footer p {
+    margin: 5px 0;
+}
+
+.footer-version {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+/* ============================================ */
+/* NOTIFICAÇÕES                                */
+/* ============================================ */
+.save-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #4CAF50;
+    color: white;
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 1000;
+    font-weight: 600;
+    animation: slideInRight 0.3s ease, fadeOut 0.5s ease 2s forwards;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+/* ============================================ */
+/* LOADING SPINNER                             */
+/* ============================================ */
+.spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(0,0,0,0.1);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ============================================ */
@@ -797,6 +893,14 @@ tbody tr:last-child td {
     
     .subtitle {
         font-size: 1em;
+    }
+    
+    .auth-container {
+        padding: 12px 15px;
+    }
+    
+    .auth-info {
+        gap: 10px;
     }
     
     .tabs {
@@ -854,14 +958,6 @@ tbody tr:last-child td {
         justify-content: center;
     }
     
-    .file-buttons {
-        flex-direction: column;
-    }
-    
-    .file-buttons .btn {
-        width: 100%;
-    }
-    
     .btn {
         padding: 12px 20px;
         font-size: 0.9em;
@@ -882,6 +978,12 @@ tbody tr:last-child td {
     .sequence-item {
         padding: 15px;
     }
+    
+    .info-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -900,6 +1002,7 @@ tbody tr:last-child td {
     .btn {
         padding: 10px 16px;
         font-size: 0.85em;
+        width: 100%;
     }
     
     .insert-form input {
@@ -910,9 +1013,8 @@ tbody tr:last-child td {
         padding: 15px;
     }
     
-    .unsaved-indicator {
-        font-size: 0.85em;
-        padding: 10px;
+    .auth-info {
+        flex-direction: column;
     }
 }
 
@@ -960,86 +1062,4 @@ tbody tr:last-child td {
 
 ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-}
-
-/* ============================================ */
-/* TOOLTIPS E EFEITOS ESPECIAIS               */
-/* ============================================ */
-[data-tooltip] {
-    position: relative;
-    cursor: help;
-}
-
-[data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 6px 12px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    border-radius: var(--radius-sm);
-    font-size: 0.85em;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: var(--transition-fast);
-}
-
-[data-tooltip]:hover::after {
-    opacity: 1;
-    bottom: calc(100% + 5px);
-}
-
-/* ============================================ */
-/* LOADING SPINNER                             */
-/* ============================================ */
-.spinner {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255,255,255,0.3);
-    border-radius: 50%;
-    border-top-color: white;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* ============================================ */
-/* BADGES E TAGS                               */
-/* ============================================ */
-.badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.8em;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.badge-success {
-    background: #d4edda;
-    color: #155724;
-}
-
-.badge-warning {
-    background: #fff3cd;
-    color: #856404;
-}
-
-.badge-danger {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-.badge-info {
-    background: #d1ecf1;
-    color: #0c5460;
 }
