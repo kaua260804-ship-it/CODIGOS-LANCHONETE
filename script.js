@@ -16,54 +16,85 @@ let state = {
     products: [],
     holes: [],
     currentHoleIndex: 0,
-    tokenClient: null
+    tokenClient: null,
+    gapiLoaded: false,
+    gisLoaded: false
 };
 
-// Inicializar quando o DOM estiver pronto
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM carregado, inicializando aplicação...');
-    initApp();
-});
+// Callbacks de carregamento das APIs
+function onGapiLoad() {
+    console.log('✅ Google API (gapi) carregada');
+    state.gapiLoaded = true;
+    initGapiClient();
+}
 
+function onGisLoad() {
+    console.log('✅ Google Identity Services carregado');
+    state.gisLoaded = true;
+    checkAllLoaded();
+}
+
+// Inicializar gapi client
+async function initGapiClient() {
+    try {
+        await new Promise((resolve, reject) => {
+            gapi.load('client', {
+                callback: async () => {
+                    try {
+                        await gapi.client.init({
+                            apiKey: CONFIG.API_KEY,
+                            discoveryDocs: [CONFIG.DISCOVERY_DOC],
+                        });
+                        console.log('✅ gapi client inicializado');
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                },
+                onerror: () => reject(new Error('Erro ao carregar gapi client')),
+                timeout: 10000,
+                ontimeout: () => reject(new Error('Timeout ao carregar gapi client'))
+            });
+        });
+        checkAllLoaded();
+    } catch (error) {
+        console.error('❌ Erro ao inicializar gapi:', error);
+        showError('Erro ao inicializar Google API: ' + error.message);
+    }
+}
+
+// Verificar se tudo está carregado
+function checkAllLoaded() {
+    if (state.gapiLoaded && state.gisLoaded) {
+        console.log('✅ Todas as APIs carregadas, inicializando aplicação...');
+        initApp();
+    }
+}
+
+// Inicializar aplicação
 function initApp() {
-    document.getElementById('authorize-btn').addEventListener('click', handleAuthClick);
-    document.getElementById('logout-btn').addEventListener('click', handleSignoutClick);
+    console.log('🚀 Inicializando aplicação...');
+    
+    // Configurar botão de login
+    const authorizeBtn = document.getElementById('authorize-btn');
+    if (authorizeBtn) {
+        authorizeBtn.addEventListener('click', handleAuthClick);
+        console.log('✅ Botão de login configurado');
+    } else {
+        console.error('❌ Botão de login não encontrado!');
+    }
+    
+    // Configurar botão de logout
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleSignoutClick);
+    }
     
     // Configurar formulários
     setupForms();
     
-    // Inicializar Google API
-    loadGoogleApi();
-}
-
-function loadGoogleApi() {
-    showLoading(true, 'Inicializando Google API...');
-    
-    gapi.load('client', {
-        callback: async () => {
-            try {
-                await gapi.client.init({
-                    apiKey: CONFIG.API_KEY,
-                    discoveryDocs: [CONFIG.DISCOVERY_DOC],
-                });
-                console.log('Google API Client inicializado');
-                showLoading(false);
-            } catch (error) {
-                console.error('Erro ao inicializar API:', error);
-                showError('Erro ao inicializar Google API: ' + error.message);
-                showLoading(false);
-            }
-        },
-        onerror: function() {
-            showError('Erro ao carregar Google API');
-            showLoading(false);
-        },
-        timeout: 10000,
-        ontimeout: function() {
-            showError('Timeout ao carregar Google API');
-            showLoading(false);
-        }
-    });
+    // Verificar se já existe sessão
+    checkExistingSession();
 }
 
 function setupForms() {
@@ -80,20 +111,42 @@ function setupForms() {
     }
 }
 
+// Verificar sessão existente
+function checkExistingSession() {
+    // Tentar obter token do sessionStorage
+    const savedToken = sessionStorage.getItem('google_access_token');
+    if (savedToken) {
+        console.log('🔑 Token encontrado na sessão');
+        state.accessToken = savedToken;
+        state.isAuthenticated = true;
+        gapi.client.setToken({ access_token: savedToken });
+        updateUIForAuth();
+        loadSheetData();
+    }
+}
+
 // Função de autenticação
 function handleAuthClick() {
-    if (state.tokenClient) {
-        // Se já existe um token client, solicitar token
-        state.tokenClient.requestAccessToken();
-    } else {
-        // Criar novo token client
+    console.log('🔐 Iniciando autenticação...');
+    
+    if (!state.gisLoaded) {
+        showError('Google Identity Services ainda não carregou. Aguarde um momento e tente novamente.');
+        return;
+    }
+
+    try {
         state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CONFIG.CLIENT_ID,
             scope: CONFIG.SCOPES,
             callback: async (tokenResponse) => {
+                console.log('🔑 Token recebido');
+                
                 if (tokenResponse && tokenResponse.access_token) {
                     state.accessToken = tokenResponse.access_token;
                     state.isAuthenticated = true;
+                    
+                    // Salvar token na sessão
+                    sessionStorage.setItem('google_access_token', tokenResponse.access_token);
                     
                     // Configurar token no gapi
                     gapi.client.setToken({
@@ -107,21 +160,30 @@ function handleAuthClick() {
                 }
             },
             error_callback: (error) => {
-                console.error('Erro na autenticação:', error);
+                console.error('❌ Erro na autenticação:', error);
                 showError('Erro ao autenticar: ' + (error.message || 'Erro desconhecido'));
             }
         });
         
+        // Solicitar token
         state.tokenClient.requestAccessToken();
+    } catch (error) {
+        console.error('❌ Erro ao criar token client:', error);
+        showError('Erro ao iniciar autenticação: ' + error.message);
     }
 }
 
 function handleSignoutClick() {
+    console.log('👋 Realizando logout...');
+    
     if (state.accessToken) {
         // Revogar token
         google.accounts.oauth2.revoke(state.accessToken, () => {
-            console.log('Token revogado');
+            console.log('✅ Token revogado');
         });
+        
+        // Limpar sessionStorage
+        sessionStorage.removeItem('google_access_token');
     }
     
     // Limpar estado
@@ -130,6 +192,9 @@ function handleSignoutClick() {
     state.products = [];
     state.holes = [];
     state.tokenClient = null;
+    
+    // Limpar token do gapi
+    gapi.client.setToken(null);
     
     // Resetar UI
     document.getElementById('app-content').style.display = 'none';
@@ -162,7 +227,7 @@ async function loadSheetData() {
             range: `${CONFIG.SHEET_NAME}!${CONFIG.RANGE}`,
         });
 
-        console.log('Dados recebidos:', response);
+        console.log('✅ Dados recebidos:', response);
 
         const data = response.result.values || [];
         
@@ -176,7 +241,7 @@ async function loadSheetData() {
                 }
                 
                 state.products.push({
-                    row: i + 1, // Google Sheets começa em 1
+                    row: i + 1,
                     code: data[i][0],
                     description: data[i][1] || '',
                     un: data[i][2] || ''
@@ -184,7 +249,7 @@ async function loadSheetData() {
             }
         }
 
-        console.log('Produtos processados:', state.products.length);
+        console.log(`✅ ${state.products.length} produtos processados`);
 
         // Ordenar por código
         state.products.sort((a, b) => {
@@ -205,11 +270,17 @@ async function loadSheetData() {
         document.getElementById('app-content').style.display = 'block';
         
     } catch (error) {
-        console.error('Erro ao carregar dados:', error);
+        console.error('❌ Erro ao carregar dados:', error);
         
         let errorMessage = 'Erro ao carregar dados da planilha.';
         if (error.result && error.result.error) {
             errorMessage += ' ' + error.result.error.message;
+        }
+        
+        // Se for erro de autenticação, fazer logout
+        if (error.status === 401 || error.status === 403) {
+            errorMessage = 'Sessão expirada. Por favor, faça login novamente.';
+            handleSignoutClick();
         }
         
         showError(errorMessage);
@@ -308,10 +379,10 @@ async function handleAddProduct(e) {
         
         if (existingProduct) {
             await updateSheetCell(existingProduct.row, [code, description, un]);
-            alert('Produto atualizado com sucesso!');
+            alert('✅ Produto atualizado com sucesso!');
         } else {
             await appendToSheet([code, description, un]);
-            alert('Produto adicionado com sucesso!');
+            alert('✅ Produto adicionado com sucesso!');
         }
         
         await loadSheetData();
@@ -320,7 +391,7 @@ async function handleAddProduct(e) {
         document.getElementById('hole-un').value = '';
         
     } catch (error) {
-        console.error('Erro ao salvar:', error);
+        console.error('❌ Erro ao salvar:', error);
         showError('Erro ao salvar produto: ' + (error.result?.error?.message || error.message));
         showLoading(false);
     }
@@ -351,9 +422,9 @@ async function handleEditProduct(e) {
         await updateSheetCell(row, [code, description, un]);
         await loadSheetData();
         closeEditModal();
-        alert('Produto atualizado com sucesso!');
+        alert('✅ Produto atualizado com sucesso!');
     } catch (error) {
-        console.error('Erro ao atualizar:', error);
+        console.error('❌ Erro ao atualizar:', error);
         showError('Erro ao atualizar produto: ' + (error.result?.error?.message || error.message));
         showLoading(false);
     }
@@ -370,7 +441,7 @@ async function appendToSheet(values) {
             values: [values]
         }
     });
-    console.log('Dados adicionados:', response);
+    console.log('✅ Dados adicionados:', response);
 }
 
 async function updateSheetCell(row, values) {
@@ -382,7 +453,7 @@ async function updateSheetCell(row, values) {
             values: [values]
         }
     });
-    console.log('Dados atualizados:', response);
+    console.log('✅ Dados atualizados:', response);
 }
 
 // Interface
@@ -509,3 +580,8 @@ window.onclick = function(event) {
         closeEditModal();
     }
 }
+
+// Inicialização quando o DOM estiver pronto
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📄 DOM carregado');
+});
