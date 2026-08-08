@@ -20,6 +20,7 @@ body {
     overflow: hidden;
 }
 
+/* Header */
 header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -42,6 +43,41 @@ header h1 {
     gap: 15px;
 }
 
+/* Botão Google */
+.google-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: white;
+    color: #444;
+    border: 1px solid #ddd;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    transition: all 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.google-btn:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transform: translateY(-1px);
+    background: #f8f8f8;
+}
+
+.google-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.google-btn img {
+    width: 20px;
+    height: 20px;
+}
+
+/* Botão Logout */
 .logout-btn {
     background: rgba(255,255,255,0.2);
     color: white;
@@ -54,6 +90,7 @@ header h1 {
     display: flex;
     align-items: center;
     gap: 8px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .logout-btn:hover {
@@ -61,6 +98,7 @@ header h1 {
     transform: translateY(-2px);
 }
 
+/* Mensagem de Login */
 .login-message {
     text-align: center;
     padding: 50px 20px;
@@ -74,6 +112,7 @@ header h1 {
     color: #666;
 }
 
+/* Loading */
 .loading {
     text-align: center;
     padding: 50px;
@@ -95,6 +134,12 @@ header h1 {
     100% { transform: rotate(360deg); }
 }
 
+#loading-message {
+    color: #666;
+    margin-top: 10px;
+}
+
+/* Tabs */
 .tabs {
     display: flex;
     background: #f8f9fa;
@@ -112,6 +157,7 @@ header h1 {
     color: #666;
     transition: all 0.3s;
     position: relative;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .tab-btn:hover {
@@ -201,6 +247,7 @@ header h1 {
     transition: all 0.3s;
     font-weight: 600;
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .action-btn:hover {
@@ -251,6 +298,7 @@ header h1 {
     font-size: 16px;
     transition: all 0.3s;
     background: #fafafa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .form-group input:focus {
@@ -277,6 +325,7 @@ header h1 {
     transition: all 0.3s;
     font-weight: 600;
     box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .submit-btn:hover, .save-btn:hover {
@@ -308,6 +357,7 @@ header h1 {
     font-size: 16px;
     transition: all 0.3s;
     background: #fafafa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .search-box input:focus {
@@ -327,6 +377,7 @@ header h1 {
     transition: all 0.3s;
     font-weight: 500;
     white-space: nowrap;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .refresh-btn:hover {
@@ -386,6 +437,7 @@ header h1 {
     transition: all 0.3s;
     font-size: 14px;
     font-weight: 500;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .edit-btn:hover {
@@ -404,10 +456,10 @@ header h1 {
     height: 100%;
     background: rgba(0,0,0,0.5);
     backdrop-filter: blur(5px);
-    animation: fadeIn 0.3s;
+    animation: modalFadeIn 0.3s;
 }
 
-@keyframes fadeIn {
+@keyframes modalFadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
 }
@@ -478,6 +530,7 @@ header h1 {
     transition: all 0.3s;
     font-weight: 500;
     flex: 1;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .cancel-btn:hover {
@@ -516,89 +569,6 @@ header h1 {
     }
 }
 
-/* Botão Google Sign-In */
-#google-signin-btn {
-    display: inline-block;
-}
-
-/* Responsividade */
-@media (max-width: 768px) {
-    header {
-        flex-direction: column;
-        text-align: center;
-    }
-    
-    header h1 {
-        font-size: 20px;
-    }
-    
-    .tabs {
-        flex-direction: column;
-    }
-    
-    .tab-btn {
-        text-align: center;
-        padding: 12px;
-    }
-    
-    .tab-content {
-        padding: 20px;
-    }
-    
-    .table-controls {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .hole-number {
-        font-size: 40px;
-    }
-    
-    .search-section {
-        padding: 20px;
-    }
-    
-    .add-product-section {
-        padding: 20px;
-    }
-    
-    .modal-content {
-        margin: 5% auto;
-        padding: 20px;
-    }
-}
-
-@media (max-width: 480px) {
-    body {
-        padding: 10px;
-    }
-    
-    .container {
-        border-radius: 10px;
-    }
-    
-    header {
-        padding: 15px;
-    }
-    
-    .tab-content {
-        padding: 15px;
-    }
-    
-    .hole-number {
-        font-size: 36px;
-    }
-    
-    .action-btn {
-        padding: 12px 30px;
-        font-size: 16px;
-    }
-    
-    .form-group input {
-        font-size: 14px;
-    }
-}
-
 /* Scrollbar personalizada */
 ::-webkit-scrollbar {
     width: 8px;
@@ -619,6 +589,117 @@ header h1 {
     background: #555;
 }
 
+/* Responsividade */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    header {
+        flex-direction: column;
+        text-align: center;
+        padding: 15px;
+    }
+    
+    header h1 {
+        font-size: 20px;
+    }
+    
+    .auth-section {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .tabs {
+        flex-direction: column;
+    }
+    
+    .tab-btn {
+        text-align: center;
+        padding: 12px;
+    }
+    
+    .tab-content {
+        padding: 20px;
+    }
+    
+    .table-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+    
+    .hole-number {
+        font-size: 40px;
+    }
+    
+    .search-section {
+        padding: 20px;
+    }
+    
+    .add-product-section {
+        padding: 20px;
+    }
+    
+    .modal-content {
+        margin: 5% auto;
+        padding: 20px;
+        width: 95%;
+    }
+    
+    .error-message {
+        left: 20px;
+        right: 20px;
+        max-width: none;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 5px;
+    }
+    
+    .container {
+        border-radius: 10px;
+    }
+    
+    header h1 {
+        font-size: 18px;
+    }
+    
+    .tab-content {
+        padding: 15px;
+    }
+    
+    .hole-number {
+        font-size: 36px;
+    }
+    
+    .action-btn {
+        padding: 12px 30px;
+        font-size: 16px;
+    }
+    
+    .form-group input {
+        font-size: 14px;
+        padding: 10px;
+    }
+    
+    .google-btn {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
+    
+    #products-table th,
+    #products-table td {
+        padding: 8px 10px;
+        font-size: 14px;
+    }
+}
+
 /* Animações de loading para células da tabela */
 .loading-row {
     background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
@@ -631,29 +712,27 @@ header h1 {
     100% { background-position: -200% 0; }
 }
 
-/* Tooltip para códigos */
-[data-tooltip] {
-    position: relative;
-    cursor: help;
+/* Estados de foco para acessibilidade */
+button:focus,
+input:focus {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
 }
 
-[data-tooltip]:before {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 5px 10px;
-    background: #333;
-    color: white;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible) {
+    outline: none;
 }
 
-[data-tooltip]:hover:before {
-    opacity: 1;
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* Desabilitar seleção de texto nos botões */
+button {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
 }
