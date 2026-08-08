@@ -3,162 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Códigos - Lanchonete</title>
+    <title>Sistema de Gerenciamento - Lanchonete</title>
     <link rel="stylesheet" href="style.css">
-    <!-- SheetJS CDN -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <h1>🍔 Gerenciador de Códigos</h1>
-            <p class="subtitle">Sistema de controle de códigos numéricos</p>
-        </header>
-
-        <!-- Seção de Autenticação Google -->
-        <div class="auth-container" id="authSection">
-            <div class="auth-info">
-                <span id="authStatus">⚠️ Não conectado ao Google Sheets</span>
-                <button class="btn btn-primary" id="authButton">
-                    🔑 Conectar Google Sheets
+        <header>
+            <h1>🍔 Sistema de Gestão - Lanchonete</h1>
+            <div class="auth-section">
+                <div id="g_id_onload"
+                     data-client_id="SEU_CLIENT_ID.apps.googleusercontent.com"
+                     data-callback="handleCredentialResponse"
+                     data-auto_prompt="false">
+                </div>
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-size="large"
+                     data-theme="outline"
+                     data-text="sign_in_with"
+                     data-shape="rectangular"
+                     data-logo_alignment="left">
+                </div>
+                <button id="logout-btn" class="logout-btn" style="display: none;">
+                    <span id="user-name"></span> | Sair
                 </button>
             </div>
+        </header>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Carregando dados da planilha...</p>
         </div>
 
-        <!-- Navegação por Abas -->
-        <nav class="tabs">
-            <button class="tab-btn active" data-tab="tab-base">📁 Base de Dados</button>
-            <button class="tab-btn" data-tab="tab-pesquisa">🔍 Pesquisar Buracos</button>
-            <button class="tab-btn" data-tab="tab-edicao">✏️ Editar Produtos</button>
-        </nav>
+        <div id="app-content" style="display: none;">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('search')">🔍 Pesquisa de Códigos Faltantes</button>
+                <button class="tab-btn" onclick="switchTab('table')">📊 Tabela de Visualização/Edição</button>
+            </div>
 
-        <!-- Conteúdo das Abas -->
-        <main class="main-content">
-            <!-- Aba Base -->
-            <section id="tab-base" class="tab-content active">
-                <div class="upload-area">
-                    <div class="upload-box" id="uploadBox">
-                        <div class="upload-icon">☁️</div>
-                        <h3>Google Sheets</h3>
-                        <p>Conectado à planilha na nuvem</p>
-                        <p class="upload-hint">Alterações são salvas automaticamente online</p>
-                        <input type="file" id="fileInput" accept=".csv,.xls,.xlsx" hidden>
-                        <button class="btn btn-secondary" id="uploadBtn">
-                            📤 Upload Manual (Fallback)
-                        </button>
-                    </div>
-                    
-                    <div class="file-info" id="fileInfo" style="display: none;">
-                        <div class="success-message">
-                            ✅ Dados carregados com sucesso!
+            <!-- Aba de Pesquisa -->
+            <div id="search-tab" class="tab-content active">
+                <div class="search-section">
+                    <div class="hole-info">
+                        <h2>Códigos Faltantes na Sequência</h2>
+                        <div id="hole-display" class="hole-display">
+                            <span class="label">Próximo código disponível:</span>
+                            <span id="current-hole" class="hole-number">--</span>
                         </div>
-                        <div class="stats">
-                            <span id="totalProducts">0</span> produtos na base
-                        </div>
-                        <div class="sync-status" id="syncStatus">
-                            🔄 Aguardando sincronização
+                        <div class="hole-stats">
+                            <span>Total de falhas encontradas: <strong id="total-holes">0</strong></span>
                         </div>
                     </div>
-                </div>
-            </section>
-
-            <!-- Aba Pesquisa -->
-            <section id="tab-pesquisa" class="tab-content">
-                <div class="search-controls">
-                    <button class="btn btn-primary" id="findNextBtn" disabled>
-                        🔍 Procurar Próximo Buraco
-                    </button>
-                    <button class="btn btn-secondary" id="resetSearchBtn">
-                        🔄 Reiniciar Pesquisa
+                    <button id="next-hole-btn" class="action-btn" onclick="showNextHole()">
+                        Próximo Código ▶
                     </button>
                 </div>
 
-                <div class="results-container" id="resultsContainer" style="display: none;">
-                    <h3>Buraco Encontrado</h3>
-                    
-                    <div class="sequence-display">
-                        <div class="sequence-item inferior">
-                            <span class="label">Limite Inferior</span>
-                            <div class="product-info">
-                                <div class="info-row">
-                                    <strong>Código:</strong> 
-                                    <span id="infCodigo">-</span>
-                                </div>
-                                <div class="info-row">
-                                    <strong>Descrição:</strong> 
-                                    <span id="infDescricao">-</span>
-                                </div>
-                                <div class="info-row">
-                                    <strong>UN:</strong> 
-                                    <span id="infUN">-</span>
-                                </div>
-                            </div>
+                <div class="add-product-section">
+                    <h3>Adicionar Produto com Código Faltante</h3>
+                    <form id="add-product-form" class="product-form">
+                        <div class="form-group">
+                            <label for="hole-code">Código:</label>
+                            <input type="text" id="hole-code" readonly>
                         </div>
+                        <div class="form-group">
+                            <label for="hole-description">Descrição:</label>
+                            <input type="text" id="hole-description" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="hole-un">UN:</label>
+                            <input type="text" id="hole-un" required>
+                        </div>
+                        <button type="submit" class="submit-btn">✅ Adicionar Produto</button>
+                    </form>
+                </div>
+            </div>
 
-                        <div class="sequence-item missing">
-                            <span class="label">⭐ Código Faltante</span>
-                            <div class="product-info">
-                                <div class="info-row">
-                                    <strong>Código:</strong> 
-                                    <span id="missingCodigo" class="highlight-code">-</span>
-                                </div>
-                            </div>
-                            <div class="insert-form">
-                                <label for="newDescricao">Nova Descrição:</label>
-                                <input type="text" id="newDescricao" placeholder="Digite a descrição do produto">
-                                
-                                <label for="newUN">Unidade de Medida:</label>
-                                <input type="text" id="newUN" placeholder="Ex: UN, KG, LT, PC">
-                                
-                                <button class="btn btn-success" id="saveNewBtn">
-                                    💾 Salvar Novo Produto
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="sequence-item superior">
-                            <span class="label">Limite Superior</span>
-                            <div class="product-info">
-                                <div class="info-row">
-                                    <strong>Código:</strong> 
-                                    <span id="supCodigo">-</span>
-                                </div>
-                                <div class="info-row">
-                                    <strong>Descrição:</strong> 
-                                    <span id="supDescricao">-</span>
-                                </div>
-                                <div class="info-row">
-                                    <strong>UN:</strong> 
-                                    <span id="supUN">-</span>
-                                </div>
-                            </div>
-                        </div>
+            <!-- Aba de Tabela -->
+            <div id="table-tab" class="tab-content">
+                <div class="table-controls">
+                    <div class="search-box">
+                        <input type="text" id="table-search" placeholder="Buscar por código ou descrição..." onkeyup="filterTable()">
                     </div>
+                    <button class="refresh-btn" onclick="loadSheetData()">🔄 Atualizar Dados</button>
                 </div>
-
-                <div class="no-results" id="noResults" style="display: none;">
-                    <div class="no-results-content">
-                        <span class="no-results-icon">✅</span>
-                        <p>Nenhum buraco encontrado!</p>
-                        <p class="no-results-subtitle">A sequência de códigos está completa.</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Aba Edição -->
-            <section id="tab-edicao" class="tab-content">
-                <div class="edition-controls">
-                    <button class="btn btn-primary" id="exportBtn" disabled>
-                        📥 Download Backup (XLSX)
-                    </button>
-                    <button class="btn btn-success" id="syncNowBtn">
-                        🔄 Sincronizar Agora
-                    </button>
-                </div>
-
                 <div class="table-container">
-                    <table id="productsTable">
+                    <table id="products-table">
                         <thead>
                             <tr>
                                 <th>Código</th>
@@ -167,29 +97,42 @@
                                 <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="tableBody">
-                            <tr>
-                                <td colspan="4" class="empty-message">
-                                    📋 Nenhum produto carregado
-                                </td>
-                            </tr>
+                        <tbody id="table-body">
+                            <!-- Dados serão carregados aqui -->
                         </tbody>
                     </table>
                 </div>
-                
-                <div class="table-info">
-                    <span id="tableCount">0</span> produtos listados
+                <div id="edit-modal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeEditModal()">&times;</span>
+                        <h3>Editar Produto</h3>
+                        <form id="edit-form">
+                            <input type="hidden" id="edit-row">
+                            <div class="form-group">
+                                <label for="edit-code">Código:</label>
+                                <input type="text" id="edit-code" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-description">Descrição:</label>
+                                <input type="text" id="edit-description" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-un">UN:</label>
+                                <input type="text" id="edit-un" required>
+                            </div>
+                            <div class="modal-actions">
+                                <button type="submit" class="save-btn">💾 Salvar</button>
+                                <button type="button" class="cancel-btn" onclick="closeEditModal()">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </section>
-        </main>
-        
-        <!-- Footer -->
-        <footer class="footer">
-            <p>🍔 Lanchonete - Sistema de Gerenciamento de Códigos</p>
-            <p class="footer-version">v2.0 - Google Sheets Integration</p>
-        </footer>
+            </div>
+        </div>
     </div>
 
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
