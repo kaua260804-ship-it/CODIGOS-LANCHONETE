@@ -3,8 +3,8 @@ const CONFIG = {
     SPREADSHEET_ID: '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54',
     SHEET_NAME: 'BASE',
     RANGE: 'A:C',
-    CLIENT_ID: 'SEU_CLIENT_ID.apps.googleusercontent.com',
-    API_KEY: 'SUA_API_KEY',
+    CLIENT_ID: '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com',
+    API_KEY: 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0',
     SCOPES: 'https://www.googleapis.com/auth/spreadsheets'
 };
 
