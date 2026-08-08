@@ -61,6 +61,19 @@ header h1 {
     transform: translateY(-2px);
 }
 
+.login-message {
+    text-align: center;
+    padding: 50px 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    margin: 30px;
+}
+
+.login-message p {
+    font-size: 18px;
+    color: #666;
+}
+
 .loading {
     text-align: center;
     padding: 50px;
@@ -101,6 +114,11 @@ header h1 {
     position: relative;
 }
 
+.tab-btn:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
 .tab-btn.active {
     color: #667eea;
     background: white;
@@ -119,14 +137,21 @@ header h1 {
 .tab-content {
     display: none;
     padding: 30px;
+    animation: fadeIn 0.3s ease-in;
 }
 
 .tab-content.active {
     display: block;
 }
 
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Seção de Pesquisa de Códigos Faltantes */
 .search-section {
-    background: #f8f9fa;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-radius: 10px;
     padding: 30px;
     margin-bottom: 30px;
@@ -136,6 +161,7 @@ header h1 {
 .hole-info h2 {
     color: #333;
     margin-bottom: 20px;
+    font-size: 22px;
 }
 
 .hole-display {
@@ -145,19 +171,23 @@ header h1 {
 .hole-display .label {
     font-size: 18px;
     color: #666;
+    display: block;
+    margin-bottom: 5px;
 }
 
 .hole-number {
-    font-size: 48px;
+    font-size: 56px;
     font-weight: bold;
     color: #667eea;
     display: block;
     margin: 10px 0;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
 }
 
 .hole-stats {
     color: #666;
     margin-bottom: 20px;
+    font-size: 16px;
 }
 
 .action-btn {
@@ -170,23 +200,31 @@ header h1 {
     cursor: pointer;
     transition: all 0.3s;
     font-weight: 600;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
 .action-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 
+.action-btn:active {
+    transform: translateY(0);
+}
+
+/* Seção de Adicionar Produto */
 .add-product-section {
     background: white;
     border: 2px solid #e0e0e0;
     border-radius: 10px;
     padding: 30px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
 .add-product-section h3 {
     color: #333;
     margin-bottom: 20px;
+    font-size: 20px;
 }
 
 .product-form, #edit-form {
@@ -201,45 +239,56 @@ header h1 {
 
 .form-group label {
     margin-bottom: 5px;
-    color: #666;
+    color: #555;
     font-weight: 500;
+    font-size: 14px;
 }
 
 .form-group input {
-    padding: 12px;
+    padding: 12px 15px;
     border: 2px solid #e0e0e0;
     border-radius: 8px;
     font-size: 16px;
-    transition: border-color 0.3s;
+    transition: all 0.3s;
+    background: #fafafa;
 }
 
 .form-group input:focus {
     outline: none;
     border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .form-group input[readonly] {
-    background: #f8f9fa;
+    background: #f0f0f0;
     cursor: not-allowed;
+    color: #666;
 }
 
 .submit-btn, .save-btn {
-    background: #4CAF50;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
     color: white;
     border: none;
-    padding: 12px 24px;
+    padding: 14px 28px;
     border-radius: 8px;
     font-size: 16px;
     cursor: pointer;
     transition: all 0.3s;
-    font-weight: 500;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
 }
 
 .submit-btn:hover, .save-btn:hover {
-    background: #45a049;
     transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.5);
 }
 
+.submit-btn:active, .save-btn:active {
+    transform: translateY(0);
+}
+
+/* Seção da Tabela */
 .table-controls {
     display: flex;
     gap: 15px;
@@ -253,30 +302,43 @@ header h1 {
 
 .search-box input {
     width: 100%;
-    padding: 12px;
+    padding: 12px 15px;
     border: 2px solid #e0e0e0;
     border-radius: 8px;
     font-size: 16px;
+    transition: all 0.3s;
+    background: #fafafa;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .refresh-btn {
-    background: #667eea;
+    background: linear-gradient(135deg, #667eea 0%, #5a6fd6 100%);
     color: white;
     border: none;
     padding: 12px 24px;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 .refresh-btn:hover {
-    background: #5a6fd6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .table-container {
     overflow-x: auto;
     border-radius: 10px;
     border: 2px solid #e0e0e0;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
 #products-table {
@@ -286,37 +348,52 @@ header h1 {
 }
 
 #products-table th {
-    background: #f8f9fa;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     padding: 15px;
     text-align: left;
     font-weight: 600;
     color: #333;
-    border-bottom: 2px solid #e0e0e0;
+    border-bottom: 2px solid #dee2e6;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 #products-table td {
     padding: 12px 15px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+#products-table tbody tr {
+    transition: background-color 0.2s;
 }
 
 #products-table tbody tr:hover {
     background: #f8f9fa;
 }
 
+#products-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
 .edit-btn {
-    background: #667eea;
+    background: linear-gradient(135deg, #667eea 0%, #5a6fd6 100%);
     color: white;
     border: none;
     padding: 8px 16px;
     border-radius: 5px;
     cursor: pointer;
     transition: all 0.3s;
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .edit-btn:hover {
-    background: #5a6fd6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
+/* Modal */
 .modal {
     display: none;
     position: fixed;
@@ -326,6 +403,7 @@ header h1 {
     width: 100%;
     height: 100%;
     background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
     animation: fadeIn 0.3s;
 }
 
@@ -342,6 +420,25 @@ header h1 {
     width: 90%;
     max-width: 500px;
     position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideDown 0.3s;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-content h3 {
+    color: #333;
+    margin-bottom: 25px;
+    font-size: 22px;
 }
 
 .close {
@@ -350,37 +447,89 @@ header h1 {
     top: 15px;
     font-size: 28px;
     cursor: pointer;
-    color: #666;
+    color: #999;
+    transition: color 0.3s;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
 }
 
 .close:hover {
     color: #333;
+    background: #f0f0f0;
 }
 
 .modal-actions {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 25px;
 }
 
 .cancel-btn {
     background: #6c757d;
     color: white;
     border: none;
-    padding: 12px 24px;
+    padding: 14px 28px;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s;
+    font-weight: 500;
+    flex: 1;
 }
 
 .cancel-btn:hover {
     background: #5a6268;
+    transform: translateY(-2px);
 }
 
+.save-btn {
+    flex: 1;
+}
+
+/* Mensagem de Erro */
+.error-message {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #f8d7da;
+    color: #721c24;
+    padding: 15px 20px;
+    border-radius: 8px;
+    border: 1px solid #f5c6cb;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 2000;
+    max-width: 400px;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Botão Google Sign-In */
+#google-signin-btn {
+    display: inline-block;
+}
+
+/* Responsividade */
 @media (max-width: 768px) {
     header {
         flex-direction: column;
         text-align: center;
+    }
+    
+    header h1 {
+        font-size: 20px;
     }
     
     .tabs {
@@ -389,13 +538,122 @@ header h1 {
     
     .tab-btn {
         text-align: center;
+        padding: 12px;
+    }
+    
+    .tab-content {
+        padding: 20px;
     }
     
     .table-controls {
         flex-direction: column;
+        gap: 10px;
+    }
+    
+    .hole-number {
+        font-size: 40px;
+    }
+    
+    .search-section {
+        padding: 20px;
+    }
+    
+    .add-product-section {
+        padding: 20px;
+    }
+    
+    .modal-content {
+        margin: 5% auto;
+        padding: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        border-radius: 10px;
+    }
+    
+    header {
+        padding: 15px;
+    }
+    
+    .tab-content {
+        padding: 15px;
     }
     
     .hole-number {
         font-size: 36px;
     }
+    
+    .action-btn {
+        padding: 12px 30px;
+        font-size: 16px;
+    }
+    
+    .form-group input {
+        font-size: 14px;
+    }
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Animações de loading para células da tabela */
+.loading-row {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Tooltip para códigos */
+[data-tooltip] {
+    position: relative;
+    cursor: help;
+}
+
+[data-tooltip]:before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 5px 10px;
+    background: #333;
+    color: white;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+[data-tooltip]:hover:before {
+    opacity: 1;
 }
