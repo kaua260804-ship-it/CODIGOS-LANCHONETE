@@ -1,97 +1,175 @@
-// Configurações
+// Configurações (Suas chaves originais mantidas)
 const CONFIG = {
     SPREADSHEET_ID: '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54',
     SHEET_NAME: 'BASE',
     RANGE: 'A:C',
     CLIENT_ID: '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com',
-    API_KEY: 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0',
-    SCOPES: 'https://www.googleapis.com/auth/spreadsheets'
+    API_KEY: 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0', // Garanta que a Google Sheets API está ativa para este projeto no Cloud
+    SCOPES: 'https://www.googleapis.com/auth/spreadsheets',
+    DISCOVERY_DOC: 'https://sheets.googleapis.com/$discovery/rest?version=v4'
 };
 
-let accessToken = null;
-let products = [];
-let holes = [];
-let currentHoleIndex = 0;
-let tokenClient = null;
-
-// Inicializar quando a página carregar
-window.onload = function() {
-    console.log('Página carregada');
-    initApp();
+// Estado da aplicação
+let state = {
+    accessToken: null,
+    isAuthenticated: false,
+    products: [],
+    holes: [],
+    currentHoleIndex: 0,
+    tokenClient: null,
+    gapiLoaded: false,
+    gisLoaded: false
 };
 
-function initApp() {
-    // Carregar gapi
-    gapi.load('client', initGapiClient);
-    
-    // Configurar botões
-    document.getElementById('authorize-btn').onclick = handleAuthClick;
-    document.getElementById('logout-btn').onclick = handleSignoutClick;
-    
-    // Configurar formulários
-    document.getElementById('add-product-form').onsubmit = handleAddProduct;
-    document.getElementById('edit-form').onsubmit = handleEditProduct;
+// Callbacks de carregamento das APIs chamados pelo index.html
+function onGapiLoad() {
+    console.log('✅ Google API (gapi) carregada');
+    state.gapiLoaded = true;
+    initGapiClient();
 }
 
+function onGisLoad() {
+    console.log('✅ Google Identity Services (GIS) carregado');
+    state.gisLoaded = true;
+    checkAllLoaded();
+}
+
+// Inicializar gapi client com tratamento robusto (Evita o erro 403 quebrando a tela)
 async function initGapiClient() {
     try {
-        await gapi.client.init({
-            apiKey: CONFIG.API_KEY,
-            discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+        await new Promise((resolve, reject) => {
+            gapi.load('client', {
+                callback: async () => {
+                    try {
+                        await gapi.client.init({
+                            apiKey: CONFIG.API_KEY,
+                            discoveryDocs: [CONFIG.DISCOVERY_DOC],
+                        });
+                        console.log('✅ gapi client inicializado');
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                },
+                onerror: () => reject(new Error('Erro ao carregar gapi client')),
+                timeout: 10000
+            });
         });
-        console.log('✅ API inicializada');
+        checkAllLoaded();
     } catch (error) {
-        console.error('Erro ao inicializar API:', error);
-        showError('Erro ao inicializar Google API');
+        console.error('❌ Erro ao inicializar gapi:', error);
+        showError('Erro 403: Verifique se a "Google Sheets API" está ativada no Google Cloud Console.');
     }
 }
 
-function handleAuthClick() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CONFIG.CLIENT_ID,
-        scope: CONFIG.SCOPES,
-        callback: async (response) => {
-            if (response.access_token) {
-                accessToken = response.access_token;
-                gapi.client.setToken({ access_token: accessToken });
-                
-                document.getElementById('authorize-btn').style.display = 'none';
-                document.getElementById('logout-btn').style.display = 'flex';
-                document.getElementById('login-message').style.display = 'none';
-                
-                await loadSheetData();
+// Verifica se ambas as APIs (GAPI e GIS) carregaram antes de liberar o app
+function checkAllLoaded() {
+    if (state.gapiLoaded && state.gisLoaded) {
+        console.log('✅ Todas as APIs carregadas, inicializando aplicação...');
+        initApp();
+    }
+}
+
+// Inicializa a aplicação (Evita o erro "google is not defined")
+function initApp() {
+    console.log('🚀 Inicializando aplicação...');
+
+    // Configurar botões
+    const authorizeBtn = document.getElementById('authorize-btn');
+    if (authorizeBtn) authorizeBtn.addEventListener('click', handleAuthClick);
+    
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.addEventListener('click', handleSignoutClick);
+
+    // Configurar formulários
+    setupForms();
+
+    // Inicializar o Token Client (Google Identity Services) de forma segura
+    try {
+        state.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CONFIG.CLIENT_ID,
+            scope: CONFIG.SCOPES,
+            callback: async (tokenResponse) => {
+                console.log('🔑 Token recebido');
+                if (tokenResponse && tokenResponse.access_token) {
+                    state.accessToken = tokenResponse.access_token;
+                    state.isAuthenticated = true;
+                    
+                    sessionStorage.setItem('google_access_token', tokenResponse.access_token);
+                    gapi.client.setToken({ access_token: state.accessToken });
+                    
+                    updateUIForAuth();
+                    await loadSheetData();
+                }
+            },
+            error_callback: (error) => {
+                console.error('❌ Erro na autenticação:', error);
+                showError('Erro ao autenticar: ' + (error.message || 'Erro desconhecido'));
             }
-        },
-        error_callback: (error) => {
-            console.error('Erro na autenticação:', error);
-            showError('Erro ao fazer login');
-        }
-    });
-    
-    tokenClient.requestAccessToken();
-}
-
-function handleSignoutClick() {
-    if (accessToken) {
-        google.accounts.oauth2.revoke(accessToken, () => {
-            console.log('Token revogado');
         });
+        console.log('✅ Token Client configurado.');
+    } catch (error) {
+        console.error('❌ Erro ao configurar o Token Client:', error);
+        showError('Erro interno do Google Identity Services.');
     }
-    
-    accessToken = null;
-    products = [];
-    holes = [];
-    tokenClient = null;
-    
-    gapi.client.setToken(null);
-    
-    document.getElementById('authorize-btn').style.display = 'flex';
-    document.getElementById('logout-btn').style.display = 'none';
-    document.getElementById('login-message').style.display = 'block';
-    document.getElementById('app-content').style.display = 'none';
+
+    // Verificar se já existe sessão
+    checkExistingSession();
 }
 
+function setupForms() {
+    const addForm = document.getElementById('add-product-form');
+    if (addForm) addForm.addEventListener('submit', handleAddProduct);
+
+    const editForm = document.getElementById('edit-form');
+    if (editForm) editForm.addEventListener('submit', handleEditProduct);
+}
+
+function checkExistingSession() {
+    const savedToken = sessionStorage.getItem('google_access_token');
+    if (savedToken) {
+        console.log('🔑 Token encontrado na sessão');
+        state.accessToken = savedToken;
+        state.isAuthenticated = true;
+        gapi.client.setToken({ access_token: savedToken });
+        updateUIForAuth();
+        loadSheetData();
+    }
+}
+
+// Acionado ao clicar no botão "Entrar com Google"
+function handleAuthClick() {
+    console.log('🔐 Iniciando autenticação...');
+    if (!state.tokenClient) {
+        showError('O sistema de login ainda não foi carregado. Aguarde um momento.');
+        return;
+    }
+    state.tokenClient.requestAccessToken();
+}
+
+// Acionado ao clicar no botão "Sair"
+function handleSignoutClick() {
+    console.log('👋 Realizando logout...');
+    if (state.accessToken) {
+        google.accounts.oauth2.revoke(state.accessToken, () => console.log('✅ Token revogado'));
+        sessionStorage.removeItem('google_access_token');
+    }
+
+    state.accessToken = null;
+    state.isAuthenticated = false;
+    state.products = [];
+    state.holes = [];
+    gapi.client.setToken(null);
+
+    document.getElementById('app-content').style.display = 'none';
+    document.getElementById('login-message').style.display = 'block';
+    updateUIForAuth();
+}
+
+// Carregar dados da planilha
 async function loadSheetData() {
+    if (!state.isAuthenticated) return;
+    
     showLoading(true, 'Carregando dados da planilha...');
     hideError();
 
@@ -100,18 +178,17 @@ async function loadSheetData() {
             spreadsheetId: CONFIG.SPREADSHEET_ID,
             range: `${CONFIG.SHEET_NAME}!${CONFIG.RANGE}`,
         });
-
-        const data = response.result.values || [];
-        products = [];
         
+        console.log('✅ Dados recebidos');
+        const data = response.result.values || [];
+        state.products = [];
+
         for (let i = 0; i < data.length; i++) {
             if (data[i].length >= 3 && data[i][0]) {
                 const firstCell = data[i][0].toString().toLowerCase();
-                if (firstCell === 'código' || firstCell === 'codigo' || firstCell === 'code') {
-                    continue;
-                }
-                
-                products.push({
+                if (firstCell === 'código' || firstCell === 'codigo' || firstCell === 'code') continue;
+
+                state.products.push({
                     row: i + 1,
                     code: data[i][0],
                     description: data[i][1] || '',
@@ -120,93 +197,99 @@ async function loadSheetData() {
             }
         }
 
-        console.log('✅ ' + products.length + ' produtos carregados');
-
-        products.sort((a, b) => {
+        state.products.sort((a, b) => {
             const numA = parseInt(a.code);
             const numB = parseInt(b.code);
-            if (!isNaN(numA) && !isNaN(numB)) {
-                return numA - numB;
-            }
-            return a.code.localeCompare(b.code);
+            return (!isNaN(numA) && !isNaN(numB)) ? numA - numB : a.code.localeCompare(b.code);
         });
-        
+
         findHoles();
         updateTable();
         updateHoleDisplay();
         
         showLoading(false);
+        document.getElementById('login-message').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
-        
+
     } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-        showError('Erro ao carregar dados: ' + (error.result?.error?.message || error.message));
+        console.error('❌ Erro ao carregar dados:', error);
+        let errorMessage = 'Erro ao carregar dados. ';
+        if (error.result && error.result.error) {
+            errorMessage += error.result.error.message;
+        }
+        if (error.status === 401 || error.status === 403) {
+            errorMessage = 'Sessão expirada ou sem permissão. Faça login novamente.';
+            handleSignoutClick();
+        }
+        showError(errorMessage);
         showLoading(false);
     }
 }
 
+// Encontrar buracos na sequência
 function findHoles() {
-    holes = [];
-    
-    if (products.length === 0) {
-        holes.push(1);
+    state.holes = [];
+    if (state.products.length === 0) {
+        state.holes.push(1);
         return;
     }
-    
-    const codes = products
+
+    const codes = state.products
         .map(p => parseInt(p.code))
         .filter(code => !isNaN(code))
         .sort((a, b) => a - b);
-    
+
     if (codes.length === 0) {
-        holes.push(1);
+        state.holes.push(1);
         return;
     }
-    
+
     for (let i = codes[0]; i < codes[codes.length - 1]; i++) {
-        if (!codes.includes(i)) {
-            holes.push(i);
-        }
+        if (!codes.includes(i)) state.holes.push(i);
     }
-    
+
     const nextCode = codes[codes.length - 1] + 1;
-    if (!holes.includes(nextCode)) {
-        holes.push(nextCode);
-    }
+    if (!state.holes.includes(nextCode)) state.holes.push(nextCode);
     
-    currentHoleIndex = 0;
+    state.currentHoleIndex = 0;
 }
 
 function updateHoleDisplay() {
-    if (holes.length > 0 && currentHoleIndex < holes.length) {
-        document.getElementById('current-hole').textContent = holes[currentHoleIndex];
-        document.getElementById('hole-code').value = holes[currentHoleIndex];
-        document.getElementById('total-holes').textContent = holes.length;
+    const holeDisplay = document.getElementById('current-hole');
+    const totalHoles = document.getElementById('total-holes');
+    const holeCode = document.getElementById('hole-code');
+
+    if (state.holes.length > 0 && state.currentHoleIndex < state.holes.length) {
+        const currentHole = state.holes[state.currentHoleIndex];
+        if (holeDisplay) holeDisplay.textContent = currentHole;
+        if (holeCode) holeCode.value = currentHole;
+        if (totalHoles) totalHoles.textContent = state.holes.length;
     } else {
-        document.getElementById('current-hole').textContent = '--';
-        document.getElementById('hole-code').value = '';
-        document.getElementById('total-holes').textContent = '0';
+        if (holeDisplay) holeDisplay.textContent = '--';
+        if (holeCode) holeCode.value = '';
+        if (totalHoles) totalHoles.textContent = '0';
     }
 }
 
 function showNextHole() {
-    if (holes.length === 0) {
-        alert('Não há códigos faltantes!');
+    if (state.holes.length === 0) {
+        alert('Não há códigos faltantes na sequência!');
         return;
     }
-    
-    currentHoleIndex = (currentHoleIndex + 1) % holes.length;
+    state.currentHoleIndex = (state.currentHoleIndex + 1) % state.holes.length;
     updateHoleDisplay();
     
-    document.getElementById('hole-description').value = '';
-    document.getElementById('hole-un').value = '';
+    const holeDesc = document.getElementById('hole-description');
+    const holeUn = document.getElementById('hole-un');
+    if (holeDesc) holeDesc.value = '';
+    if (holeUn) holeUn.value = '';
 }
 
+// Adicionar / Editar Produto
 async function handleAddProduct(e) {
     e.preventDefault();
-    
-    if (!accessToken) {
-        alert('Faça login primeiro.');
+    if (!state.isAuthenticated) {
+        alert('Por favor, faça login primeiro.');
         return;
     }
 
@@ -219,36 +302,24 @@ async function handleAddProduct(e) {
         return;
     }
 
-    showLoading(true, 'Salvando...');
+    showLoading(true, 'Salvando produto...');
+    hideError();
 
     try {
-        const existingProduct = products.find(p => p.code === code);
-        
+        const existingProduct = state.products.find(p => p.code === code);
         if (existingProduct) {
-            await gapi.client.sheets.spreadsheets.values.update({
-                spreadsheetId: CONFIG.SPREADSHEET_ID,
-                range: `${CONFIG.SHEET_NAME}!A${existingProduct.row}:C${existingProduct.row}`,
-                valueInputOption: 'USER_ENTERED',
-                resource: { values: [[code, description, un]] }
-            });
-            alert('✅ Produto atualizado!');
+            await updateSheetCell(existingProduct.row, [code, description, un]);
+            alert('✅ Produto atualizado com sucesso!');
         } else {
-            await gapi.client.sheets.spreadsheets.values.append({
-                spreadsheetId: CONFIG.SPREADSHEET_ID,
-                range: `${CONFIG.SHEET_NAME}!A:C`,
-                valueInputOption: 'USER_ENTERED',
-                insertDataOption: 'INSERT_ROWS',
-                resource: { values: [[code, description, un]] }
-            });
-            alert('✅ Produto adicionado!');
+            await appendToSheet([code, description, un]);
+            alert('✅ Produto adicionado com sucesso!');
         }
         
+        await loadSheetData();
         document.getElementById('hole-description').value = '';
         document.getElementById('hole-un').value = '';
-        await loadSheetData();
-        
     } catch (error) {
-        console.error('Erro ao salvar:', error);
+        console.error('❌ Erro ao salvar:', error);
         showError('Erro ao salvar: ' + (error.result?.error?.message || error.message));
         showLoading(false);
     }
@@ -256,56 +327,60 @@ async function handleAddProduct(e) {
 
 async function handleEditProduct(e) {
     e.preventDefault();
-    
-    if (!accessToken) {
-        alert('Faça login primeiro.');
-        return;
-    }
+    if (!state.isAuthenticated) return;
 
     const row = document.getElementById('edit-row').value;
     const code = document.getElementById('edit-code').value;
     const description = document.getElementById('edit-description').value.trim();
     const un = document.getElementById('edit-un').value.trim();
 
-    if (!description || !un) {
-        alert('Preencha todos os campos.');
-        return;
-    }
-
-    showLoading(true, 'Atualizando...');
+    showLoading(true, 'Atualizando produto...');
+    hideError();
 
     try {
-        await gapi.client.sheets.spreadsheets.values.update({
-            spreadsheetId: CONFIG.SPREADSHEET_ID,
-            range: `${CONFIG.SHEET_NAME}!A${row}:C${row}`,
-            valueInputOption: 'USER_ENTERED',
-            resource: { values: [[code, description, un]] }
-        });
-        
-        closeEditModal();
+        await updateSheetCell(row, [code, description, un]);
         await loadSheetData();
-        alert('✅ Produto atualizado!');
-        
+        closeEditModal();
+        alert('✅ Produto atualizado com sucesso!');
     } catch (error) {
-        console.error('Erro ao atualizar:', error);
+        console.error('❌ Erro ao atualizar:', error);
         showError('Erro ao atualizar: ' + (error.result?.error?.message || error.message));
         showLoading(false);
     }
 }
 
+// Comunicação com a API do Google Sheets
+async function appendToSheet(values) {
+    await gapi.client.sheets.spreadsheets.values.append({
+        spreadsheetId: CONFIG.SPREADSHEET_ID,
+        range: `${CONFIG.SHEET_NAME}!A:C`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [values] }
+    });
+}
+
+async function updateSheetCell(row, values) {
+    await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: CONFIG.SPREADSHEET_ID,
+        range: `${CONFIG.SHEET_NAME}!A${row}:C${row}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [values] }
+    });
+}
+
+// Interface (Tabs, Tabelas, UI)
 function updateTable(filterText = '') {
     const tbody = document.getElementById('table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     const filteredProducts = filterText 
-        ? products.filter(p => 
-            p.code.toString().toLowerCase().includes(filterText.toLowerCase()) ||
-            p.description.toLowerCase().includes(filterText.toLowerCase())
-          )
-        : products;
+        ? state.products.filter(p => p.code.toString().includes(filterText) || p.description.toLowerCase().includes(filterText.toLowerCase()))
+        : state.products;
 
     if (filteredProducts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhum produto encontrado</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum produto encontrado</td></tr>';
         return;
     }
 
@@ -323,7 +398,8 @@ function updateTable(filterText = '') {
 }
 
 function filterTable() {
-    updateTable(document.getElementById('table-search').value);
+    const searchText = document.getElementById('table-search').value;
+    updateTable(searchText);
 }
 
 function editProduct(product) {
@@ -341,34 +417,59 @@ function closeEditModal() {
 function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    
+
     if (tabName === 'search') {
         document.querySelectorAll('.tab-btn')[0].classList.add('active');
         document.getElementById('search-tab').classList.add('active');
-    } else {
+    } else if (tabName === 'table') {
         document.querySelectorAll('.tab-btn')[1].classList.add('active');
         document.getElementById('table-tab').classList.add('active');
     }
 }
 
+function updateUIForAuth() {
+    const authorizeBtn = document.getElementById('authorize-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const loginMessage = document.getElementById('login-message');
+
+    if (state.isAuthenticated) {
+        if (authorizeBtn) authorizeBtn.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'flex';
+        if (loginMessage) loginMessage.style.display = 'none';
+        
+        try {
+            if (state.accessToken) {
+                const payload = JSON.parse(atob(state.accessToken.split('.')[1]));
+                const userName = document.getElementById('user-name');
+                if (userName) userName.textContent = payload.name || payload.email || 'Usuário';
+            }
+        } catch (e) {
+            const userName = document.getElementById('user-name');
+            if (userName) userName.textContent = 'Usuário';
+        }
+    } else {
+        if (authorizeBtn) authorizeBtn.style.display = 'flex';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (loginMessage) loginMessage.style.display = 'block';
+    }
+}
+
 function showLoading(show, message = 'Carregando...') {
-    document.getElementById('loading').style.display = show ? 'block' : 'none';
-    if (show) document.getElementById('loading-message').textContent = message;
+    const loading = document.getElementById('loading');
+    const loadingMessage = document.getElementById('loading-message');
+    if (loading) loading.style.display = show ? 'block' : 'none';
+    if (loadingMessage && show) loadingMessage.textContent = message;
 }
 
 function showError(message) {
     const errorDiv = document.getElementById('error-message');
-    errorDiv.textContent = '❌ ' + message;
-    errorDiv.style.display = 'block';
-    setTimeout(() => { errorDiv.style.display = 'none'; }, 8000);
+    if (errorDiv) {
+        errorDiv.textContent = '❌ ' + message;
+        errorDiv.style.display = 'block';
+    }
 }
 
 function hideError() {
-    document.getElementById('error-message').style.display = 'none';
-}
-
-window.onclick = function(event) {
-    if (event.target === document.getElementById('edit-modal')) {
-        closeEditModal();
-    }
+    const errorDiv = document.getElementById('error-message');
+    if (errorDiv) errorDiv.style.display = 'none';
 }
