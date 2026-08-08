@@ -4,11 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gerenciamento - Lanchonete</title>
-    
-    <!-- Meta tags para segurança -->
-    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
-    <meta http-equiv="Cross-Origin-Embedder-Policy" content="unsafe-none">
-    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,10 +11,9 @@
         <header>
             <h1>🍔 Sistema de Gestão - Lanchonete</h1>
             <div class="auth-section">
-                <!-- Container para o botão do Google -->
-                <div id="google-signin-container"></div>
+                <div id="google-signin-btn"></div>
                 <button id="logout-btn" class="logout-btn" style="display: none;">
-                    <span id="user-name">Usuário</span> | Sair
+                    <span id="user-name"></span> | Sair
                 </button>
             </div>
         </header>
@@ -133,9 +127,11 @@
         <div id="error-message" class="error-message" style="display: none;"></div>
     </div>
 
-    <!-- Google API Scripts - Carregados em ordem específica -->
+    <!-- Carregar Google API primeiro -->
     <script src="https://apis.google.com/js/api.js"></script>
+    <!-- Carregar Google Identity Services depois -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Carregar script da aplicação -->
     <script src="script.js"></script>
 </body>
 </html>
