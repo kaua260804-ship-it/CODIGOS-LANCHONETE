@@ -8,7 +8,7 @@ class ProductManager {
         // Configuração da planilha Google
         this.SHEET_ID = '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54';
         this.SHEET_NAME = 'Sheet1';
-        this.API_KEY = 'SUA_API_KEY_AQUI'; // Vamos criar isso
+        this.API_KEY = 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0'; // Vamos criar isso
         
         // Estado da aplicação
         this.products = [];
