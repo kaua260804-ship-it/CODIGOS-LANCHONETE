@@ -1,76 +1,142 @@
 // Configurações
-const SPREADSHEET_ID = '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54';
-const SHEET_NAME = 'BASE';
-const RANGE = 'A:C';
-const CLIENT_ID = '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
-
-let accessToken = null;
-let products = [];
-let holes = [];
-let currentHoleIndex = 0;
-let isAuthenticated = false;
-
-// Inicialização do Google Identity Services
-window.onload = function() {
-    initializeGoogleAuth();
+const CONFIG = {
+    SPREADSHEET_ID: '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54',
+    SHEET_NAME: 'BASE',
+    RANGE: 'A:C',
+    CLIENT_ID: 'SEU_CLIENT_ID.apps.googleusercontent.com',
+    API_KEY: 'SUA_API_KEY',
+    SCOPES: 'https://www.googleapis.com/auth/spreadsheets'
 };
 
-function initializeGoogleAuth() {
-    google.accounts.id.initialize({
-        client_id: CLIENT_ID,
-        callback: handleCredentialResponse,
-        auto_select: false
-    });
+// Estado da aplicação
+let state = {
+    accessToken: null,
+    isAuthenticated: false,
+    googleInitialized: false,
+    gapiLoaded: false,
+    products: [],
+    holes: [],
+    currentHoleIndex: 0
+};
 
-    google.accounts.id.renderButton(
-        document.querySelector('.g_id_signin'),
-        { theme: 'outline', size: 'large' }
-    );
+// Garantir que a API do Google seja carregada apenas uma vez
+function onGoogleApiLoad() {
+    state.gapiLoaded = true;
+    console.log('Google API carregada');
+    initializeGoogleAuth();
+}
+
+// Inicialização do Google Identity Services
+function initializeGoogleAuth() {
+    // Evitar inicialização múltipla
+    if (state.googleInitialized) {
+        console.log('Google Auth já inicializado');
+        return;
+    }
+
+    try {
+        google.accounts.id.initialize({
+            client_id: CONFIG.CLIENT_ID,
+            callback: handleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: false
+        });
+
+        google.accounts.id.renderButton(
+            document.getElementById('google-signin-btn'),
+            { 
+                theme: 'outline', 
+                size: 'large',
+                type: 'standard',
+                text: 'sign_in_with',
+                shape: 'rectangular'
+            }
+        );
+
+        state.googleInitialized = true;
+        console.log('Google Auth inicializado com sucesso');
+    } catch (error) {
+        console.error('Erro ao inicializar Google Auth:', error);
+        showError('Erro ao inicializar autenticação Google. Verifique se o Client ID está correto.');
+    }
 }
 
 // Manipular resposta de credenciais
 async function handleCredentialResponse(response) {
     try {
-        accessToken = response.credential;
+        console.log('Resposta de credenciais recebida');
         
-        // Inicializar Google API Client
+        // Validar resposta
+        if (!response || !response.credential) {
+            throw new Error('Credenciais inválidas recebidas');
+        }
+
+        state.accessToken = response.credential;
+        
+        // Mostrar loading
+        showLoading(true);
+        
+        // Inicializar Google API Client se necessário
+        if (!state.gapiLoaded) {
+            await new Promise((resolve) => {
+                const checkGapi = setInterval(() => {
+                    if (typeof gapi !== 'undefined' && gapi.client) {
+                        clearInterval(checkGapi);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+        
+        // Carregar Google API Client
         await loadGoogleApiClient();
+        
+        // Configurar token
+        gapi.client.setToken({
+            access_token: state.accessToken
+        });
+        
+        // Atualizar estado
+        state.isAuthenticated = true;
         
         // Carregar dados da planilha
         await loadSheetData();
         
         // Atualizar UI
-        isAuthenticated = true;
         updateUIForAuth();
         
         console.log('Autenticação bem-sucedida!');
+        
     } catch (error) {
         console.error('Erro na autenticação:', error);
-        alert('Erro ao autenticar. Por favor, tente novamente.');
+        showError('Erro ao autenticar: ' + error.message);
+        showLoading(false);
     }
 }
 
 // Carregar Google API Client
-function loadGoogleApiClient() {
+async function loadGoogleApiClient() {
     return new Promise((resolve, reject) => {
-        gapi.load('client', async () => {
-            try {
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    clientId: CLIENT_ID,
-                    scope: SCOPES,
-                });
-                
-                // Configurar token de acesso
-                gapi.client.setToken({
-                    access_token: accessToken
-                });
-                
-                resolve();
-            } catch (error) {
-                reject(error);
+        gapi.load('client', {
+            callback: async () => {
+                try {
+                    await gapi.client.init({
+                        apiKey: CONFIG.API_KEY,
+                        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+                    });
+                    console.log('Google API Client inicializado');
+                    resolve();
+                } catch (error) {
+                    console.error('Erro ao inicializar API Client:', error);
+                    reject(error);
+                }
+            },
+            onerror: function() {
+                reject(new Error('Erro ao carregar biblioteca client'));
+            },
+            timeout: 5000,
+            ontimeout: function() {
+                reject(new Error('Timeout ao carregar biblioteca client'));
             }
         });
     });
@@ -78,34 +144,38 @@ function loadGoogleApiClient() {
 
 // Carregar dados da planilha
 async function loadSheetData() {
-    if (!isAuthenticated) {
+    if (!state.isAuthenticated) {
         alert('Por favor, faça login primeiro.');
         return;
     }
 
     showLoading(true);
+    hideError();
 
     try {
         const response = await gapi.client.sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!${RANGE}`,
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: `${CONFIG.SHEET_NAME}!${CONFIG.RANGE}`,
         });
+
+        console.log('Dados recebidos da planilha:', response);
 
         const data = response.result.values || [];
         
-        // Processar dados (pular cabeçalho se existir)
-        products = [];
-        let startRow = 0;
+        // Processar dados
+        state.products = [];
+        let startRow = 1; // Google Sheets começa em 1
         
-        // Verificar se a primeira linha é cabeçalho
-        if (data.length > 0 && (data[0][0] === 'Código' || data[0][0] === 'Codigo')) {
-            startRow = 1;
-        }
-
-        for (let i = startRow; i < data.length; i++) {
+        for (let i = 0; i < data.length; i++) {
             if (data[i].length >= 3 && data[i][0]) {
-                products.push({
-                    row: i + 1, // +1 porque as linhas no Google Sheets começam em 1
+                // Verificar se não é cabeçalho
+                const firstCell = data[i][0].toString().toLowerCase();
+                if (firstCell === 'código' || firstCell === 'codigo' || firstCell === 'code') {
+                    continue;
+                }
+                
+                state.products.push({
+                    row: startRow + i,
                     code: data[i][0],
                     description: data[i][1] || '',
                     un: data[i][2] || ''
@@ -113,8 +183,17 @@ async function loadSheetData() {
             }
         }
 
+        console.log('Produtos processados:', state.products);
+
         // Ordenar por código
-        products.sort((a, b) => parseInt(a.code) - parseInt(b.code));
+        state.products.sort((a, b) => {
+            const numA = parseInt(a.code);
+            const numB = parseInt(b.code);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return numA - numB;
+            }
+            return a.code.localeCompare(b.code);
+        });
         
         // Encontrar buracos/falhas na sequência
         findHoles();
@@ -124,42 +203,50 @@ async function loadSheetData() {
         updateHoleDisplay();
         
         showLoading(false);
+        document.getElementById('login-message').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
         
     } catch (error) {
         console.error('Erro ao carregar dados:', error);
+        showError('Erro ao carregar dados da planilha: ' + (error.result?.error?.message || error.message));
         showLoading(false);
-        alert('Erro ao carregar dados da planilha. Verifique o console para mais detalhes.');
     }
 }
 
 // Encontrar buracos na sequência numérica
 function findHoles() {
-    holes = [];
+    state.holes = [];
     
-    if (products.length === 0) return;
+    if (state.products.length === 0) {
+        state.holes.push(1); // Sugerir código 1 se não houver produtos
+        return;
+    }
     
     // Extrair códigos numéricos
-    const codes = products.map(p => parseInt(p.code)).filter(code => !isNaN(code));
+    const codes = state.products
+        .map(p => parseInt(p.code))
+        .filter(code => !isNaN(code))
+        .sort((a, b) => a - b);
     
-    if (codes.length === 0) return;
-    
-    codes.sort((a, b) => a - b);
+    if (codes.length === 0) {
+        state.holes.push(1);
+        return;
+    }
     
     // Encontrar falhas na sequência
     for (let i = codes[0]; i < codes[codes.length - 1]; i++) {
         if (!codes.includes(i)) {
-            holes.push(i);
+            state.holes.push(i);
         }
     }
     
-    // Sugerir próximo código após o último
+    // Sempre sugerir o próximo código após o último
     const nextCode = codes[codes.length - 1] + 1;
-    if (!holes.includes(nextCode)) {
-        holes.push(nextCode);
+    if (!state.holes.includes(nextCode)) {
+        state.holes.push(nextCode);
     }
     
-    currentHoleIndex = 0;
+    state.currentHoleIndex = 0;
 }
 
 // Atualizar display do buraco atual
@@ -168,10 +255,11 @@ function updateHoleDisplay() {
     const totalHoles = document.getElementById('total-holes');
     const holeCode = document.getElementById('hole-code');
     
-    if (holes.length > 0 && currentHoleIndex < holes.length) {
-        holeDisplay.textContent = holes[currentHoleIndex];
-        holeCode.value = holes[currentHoleIndex];
-        totalHoles.textContent = holes.length;
+    if (state.holes.length > 0 && state.currentHoleIndex < state.holes.length) {
+        const currentHole = state.holes[state.currentHoleIndex];
+        holeDisplay.textContent = currentHole;
+        holeCode.value = currentHole;
+        totalHoles.textContent = state.holes.length;
     } else {
         holeDisplay.textContent = '--';
         holeCode.value = '';
@@ -181,12 +269,12 @@ function updateHoleDisplay() {
 
 // Mostrar próximo buraco
 function showNextHole() {
-    if (holes.length === 0) {
+    if (state.holes.length === 0) {
         alert('Não há códigos faltantes na sequência!');
         return;
     }
     
-    currentHoleIndex = (currentHoleIndex + 1) % holes.length;
+    state.currentHoleIndex = (state.currentHoleIndex + 1) % state.holes.length;
     updateHoleDisplay();
     
     // Limpar campos do formulário
@@ -198,14 +286,14 @@ function showNextHole() {
 document.getElementById('add-product-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    if (!isAuthenticated) {
+    if (!state.isAuthenticated) {
         alert('Por favor, faça login primeiro.');
         return;
     }
 
     const code = document.getElementById('hole-code').value;
-    const description = document.getElementById('hole-description').value;
-    const un = document.getElementById('hole-un').value;
+    const description = document.getElementById('hole-description').value.trim();
+    const un = document.getElementById('hole-un').value.trim();
 
     if (!code || !description || !un) {
         alert('Por favor, preencha todos os campos.');
@@ -213,10 +301,21 @@ document.getElementById('add-product-form').addEventListener('submit', async fun
     }
 
     showLoading(true);
+    hideError();
 
     try {
-        // Adicionar nova linha à planilha
-        await appendToSheet([code, description, un]);
+        // Verificar se o código já existe
+        const existingProduct = state.products.find(p => p.code === code);
+        
+        if (existingProduct) {
+            // Atualizar produto existente
+            await updateSheetCell(existingProduct.row, [code, description, un]);
+            alert('Produto atualizado com sucesso!');
+        } else {
+            // Adicionar novo produto
+            await appendToSheet([code, description, un]);
+            alert('Produto adicionado com sucesso!');
+        }
         
         // Recarregar dados
         await loadSheetData();
@@ -225,27 +324,26 @@ document.getElementById('add-product-form').addEventListener('submit', async fun
         document.getElementById('hole-description').value = '';
         document.getElementById('hole-un').value = '';
         
-        alert('Produto adicionado com sucesso!');
-        
     } catch (error) {
-        console.error('Erro ao adicionar produto:', error);
+        console.error('Erro ao adicionar/atualizar produto:', error);
+        showError('Erro ao salvar produto: ' + (error.result?.error?.message || error.message));
         showLoading(false);
-        alert('Erro ao adicionar produto. Verifique o console para mais detalhes.');
     }
 });
 
 // Adicionar dados à planilha
 async function appendToSheet(values) {
     try {
-        await gapi.client.sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A:C`,
+        const response = await gapi.client.sheets.spreadsheets.values.append({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: `${CONFIG.SHEET_NAME}!A:C`,
             valueInputOption: 'USER_ENTERED',
             insertDataOption: 'INSERT_ROWS',
             resource: {
                 values: [values]
             }
         });
+        console.log('Dados adicionados com sucesso:', response);
     } catch (error) {
         console.error('Erro ao adicionar dados:', error);
         throw error;
@@ -255,14 +353,15 @@ async function appendToSheet(values) {
 // Atualizar dados na planilha
 async function updateSheetCell(row, values) {
     try {
-        await gapi.client.sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A${row}:C${row}`,
+        const response = await gapi.client.sheets.spreadsheets.values.update({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: `${CONFIG.SHEET_NAME}!A${row}:C${row}`,
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [values]
             }
         });
+        console.log('Dados atualizados com sucesso:', response);
     } catch (error) {
         console.error('Erro ao atualizar dados:', error);
         throw error;
@@ -275,14 +374,14 @@ function updateTable(filterText = '') {
     tbody.innerHTML = '';
 
     const filteredProducts = filterText 
-        ? products.filter(p => 
-            p.code.toLowerCase().includes(filterText.toLowerCase()) ||
+        ? state.products.filter(p => 
+            p.code.toString().toLowerCase().includes(filterText.toLowerCase()) ||
             p.description.toLowerCase().includes(filterText.toLowerCase())
           )
-        : products;
+        : state.products;
 
     if (filteredProducts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum produto encontrado</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Nenhum produto encontrado</td></tr>';
         return;
     }
 
@@ -293,7 +392,7 @@ function updateTable(filterText = '') {
             <td>${product.description}</td>
             <td>${product.un}</td>
             <td>
-                <button class="edit-btn" onclick='editProduct(${JSON.stringify(product)})'>
+                <button class="edit-btn" onclick='editProduct(${JSON.stringify(product).replace(/'/g, "&#39;")})'>
                     ✏️ Editar
                 </button>
             </td>
@@ -327,17 +426,23 @@ function closeEditModal() {
 document.getElementById('edit-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    if (!isAuthenticated) {
+    if (!state.isAuthenticated) {
         alert('Por favor, faça login primeiro.');
         return;
     }
 
     const row = document.getElementById('edit-row').value;
     const code = document.getElementById('edit-code').value;
-    const description = document.getElementById('edit-description').value;
-    const un = document.getElementById('edit-un').value;
+    const description = document.getElementById('edit-description').value.trim();
+    const un = document.getElementById('edit-un').value.trim();
+
+    if (!description || !un) {
+        alert('Por favor, preencha todos os campos.');
+        return;
+    }
 
     showLoading(true);
+    hideError();
 
     try {
         await updateSheetCell(row, [code, description, un]);
@@ -346,8 +451,8 @@ document.getElementById('edit-form').addEventListener('submit', async function(e
         alert('Produto atualizado com sucesso!');
     } catch (error) {
         console.error('Erro ao atualizar produto:', error);
+        showError('Erro ao atualizar produto: ' + (error.result?.error?.message || error.message));
         showLoading(false);
-        alert('Erro ao atualizar produto. Verifique o console para mais detalhes.');
     }
 });
 
@@ -369,39 +474,53 @@ function switchTab(tabName) {
 
 // Logout
 document.getElementById('logout-btn').addEventListener('click', function() {
-    google.accounts.id.disableAutoSelect();
-    accessToken = null;
-    isAuthenticated = false;
-    products = [];
-    holes = [];
+    if (typeof google !== 'undefined' && google.accounts) {
+        google.accounts.id.disableAutoSelect();
+    }
     
+    // Limpar estado
+    state.accessToken = null;
+    state.isAuthenticated = false;
+    state.products = [];
+    state.holes = [];
+    state.googleInitialized = false;
+    
+    // Resetar UI
     document.getElementById('app-content').style.display = 'none';
+    document.getElementById('login-message').style.display = 'block';
     updateUIForAuth();
     
     // Limpar campos
     document.getElementById('hole-description').value = '';
     document.getElementById('hole-un').value = '';
     document.getElementById('table-search').value = '';
+    
+    // Reinicializar Google Auth
+    setTimeout(() => {
+        initializeGoogleAuth();
+    }, 100);
 });
 
 // Atualizar UI baseado no estado de autenticação
 function updateUIForAuth() {
-    const signInDiv = document.querySelector('.g_id_signin');
+    const loginMessage = document.getElementById('login-message');
     const logoutBtn = document.getElementById('logout-btn');
     
-    if (isAuthenticated) {
-        signInDiv.style.display = 'none';
+    if (state.isAuthenticated) {
+        loginMessage.style.display = 'none';
         logoutBtn.style.display = 'flex';
         
-        // Decodificar o token JWT para obter informações do usuário (opcional)
+        // Tentar obter informações do usuário do token
         try {
-            const payload = JSON.parse(atob(accessToken.split('.')[1]));
-            document.getElementById('user-name').textContent = payload.name || 'Usuário';
+            if (state.accessToken) {
+                const payload = JSON.parse(atob(state.accessToken.split('.')[1]));
+                document.getElementById('user-name').textContent = payload.name || payload.email || 'Usuário';
+            }
         } catch (e) {
             document.getElementById('user-name').textContent = 'Usuário';
         }
     } else {
-        signInDiv.style.display = 'block';
+        loginMessage.style.display = 'block';
         logoutBtn.style.display = 'none';
     }
 }
@@ -411,6 +530,21 @@ function showLoading(show) {
     document.getElementById('loading').style.display = show ? 'block' : 'none';
 }
 
+// Mostrar erro
+function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.textContent = '❌ ' + message;
+    errorDiv.style.display = 'block';
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 5000);
+}
+
+// Esconder erro
+function hideError() {
+    document.getElementById('error-message').style.display = 'none';
+}
+
 // Fechar modal ao clicar fora
 window.onclick = function(event) {
     const modal = document.getElementById('edit-modal');
@@ -418,3 +552,13 @@ window.onclick = function(event) {
         closeEditModal();
     }
 }
+
+// Inicializar quando a página carregar
+window.addEventListener('load', function() {
+    console.log('Página carregada, aguardando APIs do Google...');
+    
+    // Verificar se as APIs já foram carregadas
+    if (typeof google !== 'undefined' && google.accounts) {
+        initializeGoogleAuth();
+    }
+});
