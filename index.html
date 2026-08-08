@@ -11,7 +11,10 @@
         <header>
             <h1>🍔 Sistema de Gestão - Lanchonete</h1>
             <div class="auth-section">
-                <div id="google-signin-btn"></div>
+                <button id="authorize-btn" class="google-btn">
+                    <img src="https://www.google.com/favicon.ico" alt="Google" width="20">
+                    Entrar com Google
+                </button>
                 <button id="logout-btn" class="logout-btn" style="display: none;">
                     <span id="user-name"></span> | Sair
                 </button>
@@ -20,7 +23,7 @@
 
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <p>Carregando dados da planilha...</p>
+            <p id="loading-message">Carregando dados da planilha...</p>
         </div>
 
         <div id="login-message" class="login-message">
@@ -33,7 +36,6 @@
                 <button class="tab-btn" onclick="switchTab('table')">📊 Tabela de Visualização/Edição</button>
             </div>
 
-            <!-- Aba de Pesquisa -->
             <div id="search-tab" class="tab-content active">
                 <div class="search-section">
                     <div class="hole-info">
@@ -71,7 +73,6 @@
                 </div>
             </div>
 
-            <!-- Aba de Tabela -->
             <div id="table-tab" class="tab-content">
                 <div class="table-controls">
                     <div class="search-box">
@@ -89,13 +90,10 @@
                                 <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="table-body">
-                            <!-- Dados serão carregados aqui -->
-                        </tbody>
+                        <tbody id="table-body"></tbody>
                     </table>
                 </div>
                 
-                <!-- Modal de Edição -->
                 <div id="edit-modal" class="modal">
                     <div class="modal-content">
                         <span class="close" onclick="closeEditModal()">&times;</span>
@@ -127,11 +125,7 @@
         <div id="error-message" class="error-message" style="display: none;"></div>
     </div>
 
-    <!-- Carregar Google API primeiro -->
     <script src="https://apis.google.com/js/api.js"></script>
-    <!-- Carregar Google Identity Services depois -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- Carregar script da aplicação -->
     <script src="script.js"></script>
 </body>
 </html>
