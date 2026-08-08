@@ -1,24 +1,20 @@
 // ============================================
 // Gerenciador de Códigos - Lanchonete
-// Versão para GitHub Pages com Google Sheets
+// Versão com Google Sheets API (Service Account)
 // ============================================
 
 class ProductManager {
     constructor() {
         // Configuração da planilha Google
         this.SHEET_ID = '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54';
-        this.SHEET_NAME = 'Sheet1'; // Nome da aba da planilha
-        
-        // Configuração OAuth
-        this.CLIENT_ID = '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com';
-        this.REDIRECT_URI = 'https://kaua260804-ship-it.github.io/CODIGOS-LANCHONETE';
+        this.SHEET_NAME = 'Sheet1';
+        this.API_KEY = 'SUA_API_KEY_AQUI'; // Vamos criar isso
         
         // Estado da aplicação
         this.products = [];
         this.currentHoleIndex = -1;
         this.holes = [];
-        this.isAuthenticated = false;
-        this.ACCESS_TOKEN = null;
+        this.isConnected = false;
         
         // Elementos DOM
         this.initializeDOM();
@@ -26,17 +22,11 @@ class ProductManager {
         // Event Listeners
         this.setupEventListeners();
         
-        // Verificar autenticação ao carregar
-        this.checkAuthentication();
+        // Carregar dados automaticamente
+        this.loadGoogleSheet();
     }
 
-    // Inicializa referências aos elementos DOM
     initializeDOM() {
-        // Autenticação
-        this.authSection = document.getElementById('authSection');
-        this.authButton = document.getElementById('authButton');
-        this.authStatus = document.getElementById('authStatus');
-        
         // Status do arquivo
         this.uploadBox = document.getElementById('uploadBox');
         this.fileInput = document.getElementById('fileInput');
@@ -76,13 +66,7 @@ class ProductManager {
         this.tabContents = document.querySelectorAll('.tab-content');
     }
 
-    // Configura todos os event listeners
     setupEventListeners() {
-        // Autenticação
-        if (this.authButton) {
-            this.authButton.addEventListener('click', () => this.authenticate());
-        }
-        
         // Upload manual (fallback)
         this.uploadBtn.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
@@ -127,106 +111,16 @@ class ProductManager {
         });
     }
 
-    // Verifica autenticação (token na URL ou localStorage)
-    checkAuthentication() {
-        // Verifica se há token na URL (retorno do OAuth)
-        const hash = window.location.hash;
-        if (hash) {
-            const params = new URLSearchParams(hash.substring(1));
-            const accessToken = params.get('access_token');
-            
-            if (accessToken) {
-                this.ACCESS_TOKEN = accessToken;
-                localStorage.setItem('googleAccessToken', accessToken);
-                this.isAuthenticated = true;
-                
-                // Limpa a URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-                
-                this.updateAuthUI(true);
-                this.loadGoogleSheet();
-                return;
-            }
-        }
-        
-        // Verifica token salvo no localStorage
-        const savedToken = localStorage.getItem('googleAccessToken');
-        if (savedToken) {
-            this.ACCESS_TOKEN = savedToken;
-            this.isAuthenticated = true;
-            this.updateAuthUI(true);
-            this.loadGoogleSheet();
-        } else {
-            this.updateAuthUI(false);
-            this.loadFromLocalStorage();
-        }
-    }
-
-    // Atualiza UI de autenticação
-    updateAuthUI(authenticated) {
-        if (this.authStatus) {
-            if (authenticated) {
-                this.authStatus.innerHTML = '✅ Conectado ao Google Sheets';
-                this.authStatus.style.color = '#4CAF50';
-                if (this.authButton) {
-                    this.authButton.textContent = '🔄 Reconectar Google Sheets';
-                    this.authButton.className = 'btn btn-secondary';
-                }
-            } else {
-                this.authStatus.innerHTML = '⚠️ Não conectado - Clique para autenticar';
-                this.authStatus.style.color = '#ff9800';
-                if (this.authButton) {
-                    this.authButton.textContent = '🔑 Conectar Google Sheets';
-                    this.authButton.className = 'btn btn-primary';
-                }
-            }
-        }
-    }
-
-    // Autenticação OAuth 2.0 para GitHub Pages
-    authenticate() {
-        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
-        
-        // Construir URL de autenticação
-        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-        authUrl.searchParams.append('client_id', this.CLIENT_ID);
-        authUrl.searchParams.append('redirect_uri', this.REDIRECT_URI);
-        authUrl.searchParams.append('response_type', 'token');
-        authUrl.searchParams.append('scope', SCOPES);
-        authUrl.searchParams.append('prompt', 'consent');
-        authUrl.searchParams.append('access_type', 'offline');
-        
-        // Redireciona para autenticação Google
-        window.location.href = authUrl.toString();
-    }
-
-    // Carrega dados da planilha Google
+    // Carrega dados da planilha Google (usando API Key)
     async loadGoogleSheet() {
-        if (!this.isAuthenticated || !this.ACCESS_TOKEN) {
-            console.log('Não autenticado, usando cache local');
-            return;
-        }
-        
         try {
             this.showLoading('Carregando dados da planilha...');
             
-            const response = await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A:C`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${this.ACCESS_TOKEN}`
-                    }
-                }
-            );
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A:C?key=${this.API_KEY}`;
+            
+            const response = await fetch(url);
             
             if (!response.ok) {
-                if (response.status === 401) {
-                    // Token expirado
-                    this.isAuthenticated = false;
-                    localStorage.removeItem('googleAccessToken');
-                    this.updateAuthUI(false);
-                    throw new Error('Sessão expirada. Faça login novamente.');
-                }
                 throw new Error('Erro ao carregar planilha');
             }
             
@@ -235,7 +129,6 @@ class ProductManager {
             if (data.values && data.values.length > 1) {
                 this.products = [];
                 
-                // Pula cabeçalho
                 for (let i = 1; i < data.values.length; i++) {
                     const row = data.values[i];
                     if (row && row.length >= 3 && row[0] && !isNaN(row[0])) {
@@ -248,11 +141,12 @@ class ProductManager {
                 }
                 
                 this.products.sort((a, b) => a.codigo - b.codigo);
+                this.isConnected = true;
                 this.updateAfterLoad();
                 this.hideLoading();
                 
                 if (this.syncStatus) {
-                    this.syncStatus.innerHTML = '✅ Sincronizado com Google Sheets';
+                    this.syncStatus.innerHTML = '✅ Conectado ao Google Sheets';
                     this.syncStatus.style.background = '#e8f5e9';
                     this.syncStatus.style.color = '#2e7d32';
                 }
@@ -261,111 +155,44 @@ class ProductManager {
         } catch (error) {
             console.error('Erro ao carregar planilha:', error);
             this.hideLoading();
-            alert('Erro ao conectar: ' + error.message);
             this.loadFromLocalStorage();
             
             if (this.syncStatus) {
-                this.syncStatus.innerHTML = '❌ Erro na sincronização';
-                this.syncStatus.style.background = '#ffebee';
-                this.syncStatus.style.color = '#c62828';
+                this.syncStatus.innerHTML = '⚠️ Usando dados locais (planilha não acessível)';
+                this.syncStatus.style.background = '#fff3e0';
+                this.syncStatus.style.color = '#e65100';
             }
         }
     }
 
-    // Salva dados na planilha Google
+    // Para escrita, vamos usar um Google Apps Script como intermediário
     async saveToGoogleSheet() {
-        if (!this.isAuthenticated || !this.ACCESS_TOKEN) {
-            this.showNotification('⚠️ Conecte ao Google Sheets primeiro');
-            return false;
-        }
+        // Como a API Key só permite leitura, vamos salvar localmente
+        // e oferecer download para atualizar a planilha manualmente
+        this.saveToLocalStorage();
+        this.showNotification('💾 Dados salvos localmente. Use o botão "Download Backup" para baixar a planilha atualizada.');
         
-        try {
-            this.showLoading('Salvando na planilha...');
-            
-            // Prepara dados
-            const values = [
-                ['Código', 'Descrição', 'UN'],
-                ...this.products.map(p => [p.codigo.toString(), p.descricao, p.un])
-            ];
-            
-            // Limpa planilha existente
-            await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A:C:clear`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${this.ACCESS_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            
-            // Escreve novos dados
-            const response = await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A1:C${values.length}?valueInputOption=RAW`,
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${this.ACCESS_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        values: values
-                    })
-                }
-            );
-            
-            if (!response.ok) {
-                throw new Error('Erro ao salvar');
-            }
-            
-            this.hideLoading();
-            this.showNotification('✅ Planilha atualizada com sucesso!');
-            
-            if (this.syncStatus) {
-                this.syncStatus.innerHTML = '✅ Sincronizado com Google Sheets';
-                this.syncStatus.style.background = '#e8f5e9';
-                this.syncStatus.style.color = '#2e7d32';
-            }
-            
-            return true;
-            
-        } catch (error) {
-            console.error('Erro ao salvar:', error);
-            this.hideLoading();
-            alert('Erro ao salvar na planilha. Tente novamente.');
-            
-            if (this.syncStatus) {
-                this.syncStatus.innerHTML = '❌ Erro na sincronização';
-                this.syncStatus.style.background = '#ffebee';
-                this.syncStatus.style.color = '#c62828';
-            }
-            
-            return false;
+        if (this.syncStatus) {
+            this.syncStatus.innerHTML = '💾 Salvo localmente - Faça download para atualizar a planilha';
+            this.syncStatus.style.background = '#e3f2fd';
+            this.syncStatus.style.color = '#1565c0';
         }
     }
 
-    // Sincronização manual
     async syncWithGoogleSheets() {
-        if (!this.isAuthenticated) {
-            alert('Conecte ao Google Sheets primeiro!');
-            return;
-        }
-        
-        await this.saveToGoogleSheet();
+        alert('Para atualizar a planilha Google:\n\n1. Clique em "Download Backup"\n2. Abra sua planilha no Google Sheets\n3. Vá em Arquivo > Importar > Upload\n4. Selecione o arquivo baixado\n5. Substitua a planilha atual');
     }
 
-    // Atualiza interface após carregar
     updateAfterLoad() {
         this.fileInfo.style.display = 'block';
         this.totalProducts.textContent = this.products.length;
         
         this.uploadBox.querySelector('h3').textContent = '☁️ Google Sheets';
-        this.uploadBox.querySelector('p').textContent = 'Planilha conectada na nuvem';
+        this.uploadBox.querySelector('p').textContent = 'Dados carregados da planilha online';
         
         const hint = this.uploadBox.querySelector('.upload-hint');
         if (hint) {
-            hint.textContent = 'Alterações são sincronizadas automaticamente';
+            hint.textContent = 'Leitura online | Para salvar, use Download Backup';
         }
         
         this.findNextBtn.disabled = false;
@@ -376,7 +203,6 @@ class ProductManager {
         this.saveToLocalStorage();
     }
 
-    // Processa upload manual
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (file) {
@@ -384,7 +210,6 @@ class ProductManager {
         }
     }
 
-    // Processa arquivo
     processFile(file) {
         const reader = new FileReader();
         
@@ -396,11 +221,6 @@ class ProductManager {
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                 
                 this.parseData(jsonData);
-                
-                // Se estiver autenticado, sincroniza com Google Sheets
-                if (this.isAuthenticated) {
-                    this.saveToGoogleSheet();
-                }
             } catch (error) {
                 alert('Erro ao ler arquivo.');
                 console.error('Erro:', error);
@@ -410,7 +230,6 @@ class ProductManager {
         reader.readAsArrayBuffer(file);
     }
 
-    // Converte dados brutos
     parseData(rawData) {
         if (!rawData || rawData.length < 2) {
             alert('Planilha vazia.');
@@ -434,7 +253,6 @@ class ProductManager {
         this.updateAfterUpload();
     }
 
-    // Atualiza após upload manual
     updateAfterUpload() {
         this.fileInfo.style.display = 'block';
         this.totalProducts.textContent = this.products.length;
@@ -447,7 +265,6 @@ class ProductManager {
         this.saveToLocalStorage();
     }
 
-    // Download Excel
     downloadExcel() {
         if (this.products.length === 0) {
             alert('Não há produtos para exportar.');
@@ -464,9 +281,9 @@ class ProductManager {
         XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
         
         XLSX.writeFile(wb, 'CodigoLanchonete.xlsx');
+        this.showNotification('✅ Planilha baixada! Importe no Google Sheets para atualizar.');
     }
 
-    // Salva no localStorage
     saveToLocalStorage() {
         try {
             localStorage.setItem('productData', JSON.stringify(this.products));
@@ -475,7 +292,6 @@ class ProductManager {
         }
     }
 
-    // Carrega do localStorage
     loadFromLocalStorage() {
         try {
             const savedData = localStorage.getItem('productData');
@@ -491,7 +307,7 @@ class ProductManager {
                 
                 const hint = this.uploadBox.querySelector('.upload-hint');
                 if (hint) {
-                    hint.textContent = 'Conecte ao Google Sheets para sincronizar';
+                    hint.textContent = 'Carregue um arquivo ou configure a API do Google Sheets';
                 }
                 
                 this.findNextBtn.disabled = false;
@@ -499,19 +315,12 @@ class ProductManager {
                 
                 this.findAllHoles();
                 this.renderTable();
-                
-                if (this.syncStatus) {
-                    this.syncStatus.innerHTML = '💾 Dados locais (não sincronizado)';
-                    this.syncStatus.style.background = '#fff3e0';
-                    this.syncStatus.style.color = '#e65100';
-                }
             }
         } catch (error) {
             console.warn('Erro ao carregar cache:', error);
         }
     }
 
-    // Encontra buracos
     findAllHoles() {
         this.holes = [];
         this.currentHoleIndex = -1;
@@ -532,7 +341,6 @@ class ProductManager {
         }
     }
 
-    // Próximo buraco
     findNextHole() {
         if (this.products.length === 0) {
             alert('Carregue os dados primeiro!');
@@ -553,7 +361,6 @@ class ProductManager {
         this.displayCurrentHole();
     }
 
-    // Exibe buraco atual
     displayCurrentHole() {
         if (this.currentHoleIndex < 0 || this.currentHoleIndex >= this.holes.length) {
             return;
@@ -580,7 +387,6 @@ class ProductManager {
         this.noResults.style.display = 'none';
     }
 
-    // Salva novo produto
     async saveNewProduct() {
         if (this.currentHoleIndex < 0) {
             alert('Nenhum buraco selecionado.');
@@ -612,15 +418,9 @@ class ProductManager {
         this.findAllHoles();
         this.updateAfterSave();
         
-        // Salva na nuvem
-        if (this.isAuthenticated) {
-            await this.saveToGoogleSheet();
-        } else {
-            this.showNotification('⚠️ Produto salvo localmente. Conecte ao Google Sheets para sincronizar.');
-        }
+        await this.saveToGoogleSheet();
     }
 
-    // Atualiza após salvar
     updateAfterSave() {
         this.renderTable();
         this.totalProducts.textContent = this.products.length;
@@ -637,7 +437,6 @@ class ProductManager {
         }
     }
 
-    // Reinicia pesquisa
     resetSearch() {
         this.currentHoleIndex = -1;
         this.findAllHoles();
@@ -645,7 +444,6 @@ class ProductManager {
         this.noResults.style.display = 'none';
     }
 
-    // Renderiza tabela
     renderTable() {
         this.tableBody.innerHTML = '';
         
@@ -685,7 +483,6 @@ class ProductManager {
         this.setupEditListeners();
     }
 
-    // Edit listeners
     setupEditListeners() {
         const editableCells = document.querySelectorAll('.editable');
         
@@ -710,10 +507,7 @@ class ProductManager {
                         this.products[index][field] = newValue.toUpperCase();
                         this.saveToLocalStorage();
                         this.renderTable();
-                        
-                        if (this.isAuthenticated) {
-                            await this.saveToGoogleSheet();
-                        }
+                        await this.saveToGoogleSheet();
                     } else {
                         cell.textContent = currentValue;
                     }
@@ -729,7 +523,6 @@ class ProductManager {
         });
     }
 
-    // Deleta produto
     async deleteProduct(index) {
         if (confirm('Excluir este produto?')) {
             this.products.splice(index, 1);
@@ -737,14 +530,10 @@ class ProductManager {
             this.renderTable();
             this.totalProducts.textContent = this.products.length;
             this.saveToLocalStorage();
-            
-            if (this.isAuthenticated) {
-                await this.saveToGoogleSheet();
-            }
+            await this.saveToGoogleSheet();
         }
     }
 
-    // Loading
     showLoading(message) {
         let loading = document.getElementById('loadingOverlay');
         if (!loading) {
@@ -780,7 +569,6 @@ class ProductManager {
         }
     }
 
-    // Notificação
     showNotification(message) {
         const notification = document.createElement('div');
         notification.className = 'save-notification';
@@ -788,10 +576,9 @@ class ProductManager {
         
         document.body.appendChild(notification);
         
-        setTimeout(() => notification.remove(), 3000);
+        setTimeout(() => notification.remove(), 4000);
     }
 
-    // Alterna abas
     switchTab(tabId) {
         this.tabBtns.forEach(btn => btn.classList.remove('active'));
         this.tabContents.forEach(content => content.classList.remove('active'));
