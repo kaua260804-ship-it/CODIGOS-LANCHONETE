@@ -9,7 +9,7 @@ class ProductManager {
         this.SHEET_ID = '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54';
         this.SHEET_NAME = 'Sheet1'; // Nome da aba da planilha
         
-        // Configuração OAuth (substitua com suas credenciais)
+        // Configuração OAuth
         this.CLIENT_ID = 'SEU_CLIENT_ID.apps.googleusercontent.com';
         this.REDIRECT_URI = 'https://kaua260804-ship-it.github.io/CODIGOS-LANCHONETE';
         
