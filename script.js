@@ -1,22 +1,24 @@
 // ============================================
 // Gerenciador de Códigos - Lanchonete
-// Versão com Google Sheets API
+// Versão para GitHub Pages com Google Sheets
 // ============================================
 
 class ProductManager {
     constructor() {
         // Configuração da planilha Google
         this.SHEET_ID = '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54';
-        this.SHEET_NAME = 'Sheet1'; // Nome da aba
-        this.API_KEY = ''; // Opcional, para leitura pública
-        this.CLIENT_ID = ''; // Necessário para escrita
-        this.ACCESS_TOKEN = ''; // Token de acesso OAuth
+        this.SHEET_NAME = 'Sheet1'; // Nome da aba da planilha
+        
+        // Configuração OAuth (substitua com suas credenciais)
+        this.CLIENT_ID = 'SEU_CLIENT_ID.apps.googleusercontent.com';
+        this.REDIRECT_URI = 'https://kaua260804-ship-it.github.io/CODIGOS-LANCHONETE';
         
         // Estado da aplicação
         this.products = [];
         this.currentHoleIndex = -1;
         this.holes = [];
         this.isAuthenticated = false;
+        this.ACCESS_TOKEN = null;
         
         // Elementos DOM
         this.initializeDOM();
@@ -24,8 +26,8 @@ class ProductManager {
         // Event Listeners
         this.setupEventListeners();
         
-        // Verificar autenticação
-        this.checkAuth();
+        // Verificar autenticação ao carregar
+        this.checkAuthentication();
     }
 
     // Inicializa referências aos elementos DOM
@@ -41,6 +43,7 @@ class ProductManager {
         this.uploadBtn = document.getElementById('uploadBtn');
         this.fileInfo = document.getElementById('fileInfo');
         this.totalProducts = document.getElementById('totalProducts');
+        this.syncStatus = document.getElementById('syncStatus');
         
         // Pesquisa
         this.findNextBtn = document.getElementById('findNextBtn');
@@ -64,7 +67,9 @@ class ProductManager {
         
         // Edição
         this.exportBtn = document.getElementById('exportBtn');
+        this.syncNowBtn = document.getElementById('syncNowBtn');
         this.tableBody = document.getElementById('tableBody');
+        this.tableCount = document.getElementById('tableCount');
         
         // Tabs
         this.tabBtns = document.querySelectorAll('.tab-btn');
@@ -108,8 +113,13 @@ class ProductManager {
         // Salvar novo produto
         this.saveNewBtn.addEventListener('click', () => this.saveNewProduct());
         
-        // Exportar/Download (fallback)
+        // Exportar/Download
         this.exportBtn.addEventListener('click', () => this.downloadExcel());
+        
+        // Sincronizar manualmente
+        if (this.syncNowBtn) {
+            this.syncNowBtn.addEventListener('click', () => this.syncWithGoogleSheets());
+        }
         
         // Tabs
         this.tabBtns.forEach(btn => {
@@ -117,18 +127,37 @@ class ProductManager {
         });
     }
 
-    // Verifica autenticação
-    checkAuth() {
-        // Verifica se há token salvo
-        const token = localStorage.getItem('googleAccessToken');
-        if (token) {
-            this.ACCESS_TOKEN = token;
+    // Verifica autenticação (token na URL ou localStorage)
+    checkAuthentication() {
+        // Verifica se há token na URL (retorno do OAuth)
+        const hash = window.location.hash;
+        if (hash) {
+            const params = new URLSearchParams(hash.substring(1));
+            const accessToken = params.get('access_token');
+            
+            if (accessToken) {
+                this.ACCESS_TOKEN = accessToken;
+                localStorage.setItem('googleAccessToken', accessToken);
+                this.isAuthenticated = true;
+                
+                // Limpa a URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                this.updateAuthUI(true);
+                this.loadGoogleSheet();
+                return;
+            }
+        }
+        
+        // Verifica token salvo no localStorage
+        const savedToken = localStorage.getItem('googleAccessToken');
+        if (savedToken) {
+            this.ACCESS_TOKEN = savedToken;
             this.isAuthenticated = true;
             this.updateAuthUI(true);
             this.loadGoogleSheet();
         } else {
             this.updateAuthUI(false);
-            // Carrega do localStorage como fallback
             this.loadFromLocalStorage();
         }
     }
@@ -140,56 +169,35 @@ class ProductManager {
                 this.authStatus.innerHTML = '✅ Conectado ao Google Sheets';
                 this.authStatus.style.color = '#4CAF50';
                 if (this.authButton) {
-                    this.authButton.textContent = '🔄 Reconectar';
+                    this.authButton.textContent = '🔄 Reconectar Google Sheets';
                     this.authButton.className = 'btn btn-secondary';
                 }
             } else {
                 this.authStatus.innerHTML = '⚠️ Não conectado - Clique para autenticar';
                 this.authStatus.style.color = '#ff9800';
                 if (this.authButton) {
-                    this.authButton.textContent = '🔑 Conectar Google';
+                    this.authButton.textContent = '🔑 Conectar Google Sheets';
                     this.authButton.className = 'btn btn-primary';
                 }
             }
         }
     }
 
-    // Autenticação OAuth 2.0
-    async authenticate() {
-        // Configuração OAuth (substitua com suas credenciais)
-        const CLIENT_ID = 'SEU_CLIENT_ID.apps.googleusercontent.com';
-        const REDIRECT_URI = window.location.origin + window.location.pathname;
+    // Autenticação OAuth 2.0 para GitHub Pages
+    authenticate() {
         const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
         
-        // Gera URL de autenticação
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-            `client_id=${CLIENT_ID}&` +
-            `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
-            `response_type=token&` +
-            `scope=${encodeURIComponent(SCOPES)}&` +
-            `prompt=consent`;
+        // Construir URL de autenticação
+        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        authUrl.searchParams.append('client_id', this.CLIENT_ID);
+        authUrl.searchParams.append('redirect_uri', this.REDIRECT_URI);
+        authUrl.searchParams.append('response_type', 'token');
+        authUrl.searchParams.append('scope', SCOPES);
+        authUrl.searchParams.append('prompt', 'consent');
+        authUrl.searchParams.append('access_type', 'offline');
         
-        // Verifica se já retornou com token
-        const hash = window.location.hash;
-        if (hash) {
-            const params = new URLSearchParams(hash.substring(1));
-            const accessToken = params.get('access_token');
-            
-            if (accessToken) {
-                this.ACCESS_TOKEN = accessToken;
-                localStorage.setItem('googleAccessToken', accessToken);
-                this.isAuthenticated = true;
-                
-                // Limpa URL
-                window.location.hash = '';
-                
-                this.updateAuthUI(true);
-                await this.loadGoogleSheet();
-            }
-        } else {
-            // Redireciona para autenticação
-            window.location.href = authUrl;
-        }
+        // Redireciona para autenticação Google
+        window.location.href = authUrl.toString();
     }
 
     // Carrega dados da planilha Google
@@ -200,6 +208,8 @@ class ProductManager {
         }
         
         try {
+            this.showLoading('Carregando dados da planilha...');
+            
             const response = await fetch(
                 `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}/values/${this.SHEET_NAME}!A:C`,
                 {
@@ -210,6 +220,13 @@ class ProductManager {
             );
             
             if (!response.ok) {
+                if (response.status === 401) {
+                    // Token expirado
+                    this.isAuthenticated = false;
+                    localStorage.removeItem('googleAccessToken');
+                    this.updateAuthUI(false);
+                    throw new Error('Sessão expirada. Faça login novamente.');
+                }
                 throw new Error('Erro ao carregar planilha');
             }
             
@@ -232,24 +249,40 @@ class ProductManager {
                 
                 this.products.sort((a, b) => a.codigo - b.codigo);
                 this.updateAfterLoad();
+                this.hideLoading();
+                
+                if (this.syncStatus) {
+                    this.syncStatus.innerHTML = '✅ Sincronizado com Google Sheets';
+                    this.syncStatus.style.background = '#e8f5e9';
+                    this.syncStatus.style.color = '#2e7d32';
+                }
             }
             
         } catch (error) {
             console.error('Erro ao carregar planilha:', error);
-            alert('Erro ao conectar com Google Sheets. Usando dados locais.');
+            this.hideLoading();
+            alert('Erro ao conectar: ' + error.message);
             this.loadFromLocalStorage();
+            
+            if (this.syncStatus) {
+                this.syncStatus.innerHTML = '❌ Erro na sincronização';
+                this.syncStatus.style.background = '#ffebee';
+                this.syncStatus.style.color = '#c62828';
+            }
         }
     }
 
     // Salva dados na planilha Google
     async saveToGoogleSheet() {
         if (!this.isAuthenticated || !this.ACCESS_TOKEN) {
-            alert('Autenticação necessária. Clique em "Conectar Google".');
+            this.showNotification('⚠️ Conecte ao Google Sheets primeiro');
             return false;
         }
         
         try {
-            // Prepara dados para enviar
+            this.showLoading('Salvando na planilha...');
+            
+            // Prepara dados
             const values = [
                 ['Código', 'Descrição', 'UN'],
                 ...this.products.map(p => [p.codigo.toString(), p.descricao, p.un])
@@ -286,14 +319,40 @@ class ProductManager {
                 throw new Error('Erro ao salvar');
             }
             
+            this.hideLoading();
             this.showNotification('✅ Planilha atualizada com sucesso!');
+            
+            if (this.syncStatus) {
+                this.syncStatus.innerHTML = '✅ Sincronizado com Google Sheets';
+                this.syncStatus.style.background = '#e8f5e9';
+                this.syncStatus.style.color = '#2e7d32';
+            }
+            
             return true;
             
         } catch (error) {
             console.error('Erro ao salvar:', error);
+            this.hideLoading();
             alert('Erro ao salvar na planilha. Tente novamente.');
+            
+            if (this.syncStatus) {
+                this.syncStatus.innerHTML = '❌ Erro na sincronização';
+                this.syncStatus.style.background = '#ffebee';
+                this.syncStatus.style.color = '#c62828';
+            }
+            
             return false;
         }
+    }
+
+    // Sincronização manual
+    async syncWithGoogleSheets() {
+        if (!this.isAuthenticated) {
+            alert('Conecte ao Google Sheets primeiro!');
+            return;
+        }
+        
+        await this.saveToGoogleSheet();
     }
 
     // Atualiza interface após carregar
@@ -301,12 +360,12 @@ class ProductManager {
         this.fileInfo.style.display = 'block';
         this.totalProducts.textContent = this.products.length;
         
-        this.uploadBox.querySelector('h3').textContent = '☁️ Google Sheets Conectado';
-        this.uploadBox.querySelector('p').textContent = 'Dados carregados da nuvem';
+        this.uploadBox.querySelector('h3').textContent = '☁️ Google Sheets';
+        this.uploadBox.querySelector('p').textContent = 'Planilha conectada na nuvem';
         
         const hint = this.uploadBox.querySelector('.upload-hint');
         if (hint) {
-            hint.textContent = 'Alterações salvas automaticamente na nuvem';
+            hint.textContent = 'Alterações são sincronizadas automaticamente';
         }
         
         this.findNextBtn.disabled = false;
@@ -337,6 +396,11 @@ class ProductManager {
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                 
                 this.parseData(jsonData);
+                
+                // Se estiver autenticado, sincroniza com Google Sheets
+                if (this.isAuthenticated) {
+                    this.saveToGoogleSheet();
+                }
             } catch (error) {
                 alert('Erro ao ler arquivo.');
                 console.error('Erro:', error);
@@ -375,23 +439,15 @@ class ProductManager {
         this.fileInfo.style.display = 'block';
         this.totalProducts.textContent = this.products.length;
         
-        this.uploadBox.querySelector('h3').textContent = '📁 Arquivo Local';
-        this.uploadBox.querySelector('p').textContent = 'Dados carregados do arquivo';
-        
         this.findNextBtn.disabled = false;
         this.exportBtn.disabled = false;
         
         this.findAllHoles();
         this.renderTable();
         this.saveToLocalStorage();
-        
-        // Tenta salvar na nuvem se autenticado
-        if (this.isAuthenticated) {
-            this.saveToGoogleSheet();
-        }
     }
 
-    // Download Excel (fallback)
+    // Download Excel
     downloadExcel() {
         if (this.products.length === 0) {
             alert('Não há produtos para exportar.');
@@ -435,7 +491,7 @@ class ProductManager {
                 
                 const hint = this.uploadBox.querySelector('.upload-hint');
                 if (hint) {
-                    hint.textContent = 'Conecte ao Google Sheets para salvar na nuvem';
+                    hint.textContent = 'Conecte ao Google Sheets para sincronizar';
                 }
                 
                 this.findNextBtn.disabled = false;
@@ -443,6 +499,12 @@ class ProductManager {
                 
                 this.findAllHoles();
                 this.renderTable();
+                
+                if (this.syncStatus) {
+                    this.syncStatus.innerHTML = '💾 Dados locais (não sincronizado)';
+                    this.syncStatus.style.background = '#fff3e0';
+                    this.syncStatus.style.color = '#e65100';
+                }
             }
         } catch (error) {
             console.warn('Erro ao carregar cache:', error);
@@ -551,7 +613,11 @@ class ProductManager {
         this.updateAfterSave();
         
         // Salva na nuvem
-        await this.saveToGoogleSheet();
+        if (this.isAuthenticated) {
+            await this.saveToGoogleSheet();
+        } else {
+            this.showNotification('⚠️ Produto salvo localmente. Conecte ao Google Sheets para sincronizar.');
+        }
     }
 
     // Atualiza após salvar
@@ -587,10 +653,11 @@ class ProductManager {
             this.tableBody.innerHTML = `
                 <tr>
                     <td colspan="4" class="empty-message">
-                        Nenhum produto carregado
+                        📋 Nenhum produto carregado
                     </td>
                 </tr>
             `;
+            this.tableCount.textContent = '0';
             return;
         }
         
@@ -614,6 +681,7 @@ class ProductManager {
             this.tableBody.appendChild(row);
         });
         
+        this.tableCount.textContent = this.products.length;
         this.setupEditListeners();
     }
 
@@ -643,8 +711,9 @@ class ProductManager {
                         this.saveToLocalStorage();
                         this.renderTable();
                         
-                        // Salva na nuvem
-                        await this.saveToGoogleSheet();
+                        if (this.isAuthenticated) {
+                            await this.saveToGoogleSheet();
+                        }
                     } else {
                         cell.textContent = currentValue;
                     }
@@ -669,8 +738,45 @@ class ProductManager {
             this.totalProducts.textContent = this.products.length;
             this.saveToLocalStorage();
             
-            // Salva na nuvem
-            await this.saveToGoogleSheet();
+            if (this.isAuthenticated) {
+                await this.saveToGoogleSheet();
+            }
+        }
+    }
+
+    // Loading
+    showLoading(message) {
+        let loading = document.getElementById('loadingOverlay');
+        if (!loading) {
+            loading = document.createElement('div');
+            loading.id = 'loadingOverlay';
+            loading.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+            `;
+            document.body.appendChild(loading);
+        }
+        
+        loading.innerHTML = `
+            <div style="background: white; padding: 30px; border-radius: 10px; text-align: center;">
+                <div class="spinner"></div>
+                <p style="margin-top: 15px;">${message}</p>
+            </div>
+        `;
+    }
+
+    hideLoading() {
+        const loading = document.getElementById('loadingOverlay');
+        if (loading) {
+            loading.remove();
         }
     }
 
@@ -679,19 +785,6 @@ class ProductManager {
         const notification = document.createElement('div');
         notification.className = 'save-notification';
         notification.innerHTML = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #4CAF50;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 1000;
-            animation: slideIn 0.3s ease, fadeOut 0.5s ease 2s forwards;
-            font-weight: 600;
-        `;
         
         document.body.appendChild(notification);
         
