@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gerenciamento - Lanchonete</title>
+    
+    <!-- Meta tags para segurança -->
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="unsafe-none">
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,19 +16,7 @@
         <header>
             <h1>🍔 Sistema de Gestão - Lanchonete</h1>
             <div class="auth-section">
-                <div id="g_id_onload"
-                     data-client_id="SEU_CLIENT_ID.apps.googleusercontent.com"
-                     data-callback="handleCredentialResponse"
-                     data-auto_prompt="false">
-                </div>
-                <div class="g_id_signin"
-                     data-type="standard"
-                     data-size="large"
-                     data-theme="outline"
-                     data-text="sign_in_with"
-                     data-shape="rectangular"
-                     data-logo_alignment="left">
-                </div>
+                <div id="google-signin-btn"></div>
                 <button id="logout-btn" class="logout-btn" style="display: none;">
                     <span id="user-name"></span> | Sair
                 </button>
@@ -33,6 +26,10 @@
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
             <p>Carregando dados da planilha...</p>
+        </div>
+
+        <div id="login-message" class="login-message">
+            <p>🔐 Faça login com sua conta Google para acessar o sistema</p>
         </div>
 
         <div id="app-content" style="display: none;">
@@ -102,7 +99,9 @@
                         </tbody>
                     </table>
                 </div>
-                <div id="edit-modal" class="modal" style="display: none;">
+                
+                <!-- Modal de Edição -->
+                <div id="edit-modal" class="modal">
                     <div class="modal-content">
                         <span class="close" onclick="closeEditModal()">&times;</span>
                         <h3>Editar Produto</h3>
@@ -129,10 +128,13 @@
                 </div>
             </div>
         </div>
+        
+        <div id="error-message" class="error-message" style="display: none;"></div>
     </div>
 
+    <!-- Google API Scripts -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://apis.google.com/js/api.js" onload="onGoogleApiLoad()"></script>
     <script src="script.js"></script>
 </body>
 </html>
