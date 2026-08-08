@@ -1,6 +1,6 @@
 // ============================================
 // Gerenciador de Códigos - Lanchonete
-// Versão com File System Access API
+// Versão com leitura/escrita direta do arquivo
 // ============================================
 
 class ProductManager {
@@ -9,8 +9,8 @@ class ProductManager {
         this.products = [];
         this.currentHoleIndex = -1;
         this.holes = [];
-        this.fileHandle = null; // Referência ao arquivo
-        this.currentFileName = '';
+        this.fileName = 'CodigoLanchonete.xlsx';
+        this.isFileLoaded = false;
         
         // Elementos DOM
         this.initializeDOM();
@@ -18,46 +18,18 @@ class ProductManager {
         // Event Listeners
         this.setupEventListeners();
         
-        // Verificar suporte à API
-        this.checkFileSystemAPISupport();
-    }
-
-    // Verifica se o navegador suporta a File System Access API
-    checkFileSystemAPISupport() {
-        if (!('showOpenFilePicker' in window)) {
-            console.warn('File System Access API não suportada. Usando fallback.');
-            // Adiciona aviso na interface
-            const uploadBox = document.querySelector('.upload-box');
-            const warning = document.createElement('div');
-            warning.className = 'warning-message';
-            warning.innerHTML = `
-                ⚠️ Seu navegador não suporta edição direta de arquivos.
-                <br>Use Chrome, Edge ou Opera para melhor experiência.
-                <br>O sistema usará download/upload como alternativa.
-            `;
-            warning.style.cssText = `
-                background: #fff3cd;
-                color: #856404;
-                padding: 10px;
-                border-radius: 5px;
-                margin-top: 10px;
-                font-size: 0.9em;
-            `;
-            uploadBox.appendChild(warning);
-        }
+        // Carregar arquivo automaticamente
+        this.loadDefaultFile();
     }
 
     // Inicializa referências aos elementos DOM
     initializeDOM() {
-        // Upload
+        // Status do arquivo
         this.uploadBox = document.getElementById('uploadBox');
         this.fileInput = document.getElementById('fileInput');
         this.uploadBtn = document.getElementById('uploadBtn');
         this.fileInfo = document.getElementById('fileInfo');
         this.totalProducts = document.getElementById('totalProducts');
-        
-        // Botões de arquivo
-        this.createFileButtons();
         
         // Pesquisa
         this.findNextBtn = document.getElementById('findNextBtn');
@@ -88,61 +60,10 @@ class ProductManager {
         this.tabContents = document.querySelectorAll('.tab-content');
     }
 
-    // Cria botões adicionais para gerenciamento de arquivo
-    createFileButtons() {
-        const fileInfo = document.getElementById('fileInfo');
-        
-        // Container para botões
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'file-buttons';
-        buttonContainer.style.cssText = `
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            justify-content: center;
-            flex-wrap: wrap;
-        `;
-        
-        // Botão Salvar no Arquivo
-        const saveToFileBtn = document.createElement('button');
-        saveToFileBtn.className = 'btn btn-success';
-        saveToFileBtn.textContent = '💾 Salvar no Arquivo Original';
-        saveToFileBtn.id = 'saveToFileBtn';
-        saveToFileBtn.style.display = 'none';
-        
-        // Botão Salvar Como
-        const saveAsBtn = document.createElement('button');
-        saveAsBtn.className = 'btn btn-primary';
-        saveAsBtn.textContent = '📁 Salvar Como Novo Arquivo';
-        saveAsBtn.id = 'saveAsBtn';
-        saveAsBtn.style.display = 'none';
-        
-        buttonContainer.appendChild(saveToFileBtn);
-        buttonContainer.appendChild(saveAsBtn);
-        
-        // Adiciona após o elemento existente
-        fileInfo.appendChild(buttonContainer);
-        
-        // Atualiza referências
-        this.saveToFileBtn = saveToFileBtn;
-        this.saveAsBtn = saveAsBtn;
-        
-        // Event listeners
-        saveToFileBtn.addEventListener('click', () => this.saveToOriginalFile());
-        saveAsBtn.addEventListener('click', () => this.saveAsNewFile());
-    }
-
     // Configura todos os event listeners
     setupEventListeners() {
-        // Upload tradicional
-        this.uploadBtn.addEventListener('click', () => {
-            if ('showOpenFilePicker' in window) {
-                this.openFileWithPicker();
-            } else {
-                this.fileInput.click();
-            }
-        });
-        
+        // Upload manual (fallback)
+        this.uploadBtn.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
         
         // Drag and drop
@@ -155,15 +76,12 @@ class ProductManager {
             this.uploadBox.style.borderColor = 'var(--border-color)';
         });
         
-        this.uploadBox.addEventListener('drop', async (e) => {
+        this.uploadBox.addEventListener('drop', (e) => {
             e.preventDefault();
             this.uploadBox.style.borderColor = 'var(--border-color)';
-            
             const file = e.dataTransfer.files[0];
             if (file) {
-                // Para drag and drop, não temos file handle, então usamos fallback
-                this.fileHandle = null;
-                await this.processFile(file);
+                this.processFile(file);
             }
         });
         
@@ -174,79 +92,130 @@ class ProductManager {
         // Salvar novo produto
         this.saveNewBtn.addEventListener('click', () => this.saveNewProduct());
         
-        // Exportar (fallback)
-        this.exportBtn.addEventListener('click', () => this.exportToExcel());
+        // Exportar/Download
+        this.exportBtn.addEventListener('click', () => this.downloadExcel());
         
         // Tabs
         this.tabBtns.forEach(btn => {
             btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
         });
         
-        // Auto-save quando houver alterações
+        // Auto-save antes de fechar
         window.addEventListener('beforeunload', (e) => {
-            if (this.hasUnsavedChanges && this.fileHandle) {
-                e.preventDefault();
-                e.returnValue = 'Você tem alterações não salvas. Deseja sair?';
-                return e.returnValue;
+            if (this.hasUnsavedChanges()) {
+                this.saveToLocalStorage();
+                this.downloadExcelSilent();
             }
         });
     }
 
-    // Abre arquivo usando File System Access API
-    async openFileWithPicker() {
+    // Carrega o arquivo padrão da pasta raiz
+    async loadDefaultFile() {
         try {
-            const [fileHandle] = await window.showOpenFilePicker({
-                types: [
-                    {
-                        description: 'Planilhas',
-                        accept: {
-                            'text/csv': ['.csv'],
-                            'application/vnd.ms-excel': ['.xls'],
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
-                        }
-                    }
-                ]
-            });
+            // Tenta carregar o arquivo da mesma pasta
+            const response = await fetch(this.fileName);
             
-            this.fileHandle = fileHandle;
-            const file = await fileHandle.getFile();
-            await this.processFile(file);
-            
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.error('Erro ao abrir arquivo:', error);
-                alert('Erro ao abrir o arquivo.');
+            if (!response.ok) {
+                throw new Error('Arquivo não encontrado');
             }
-        }
-    }
-
-    // Processa arquivo (comum para todos os métodos)
-    async processFile(file) {
-        try {
-            this.currentFileName = file.name;
-            const buffer = await file.arrayBuffer();
-            const data = new Uint8Array(buffer);
             
+            const arrayBuffer = await response.arrayBuffer();
+            const data = new Uint8Array(arrayBuffer);
+            
+            // Processa o arquivo
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
             
             this.parseData(jsonData);
-            this.hasUnsavedChanges = false;
+            this.isFileLoaded = true;
+            this.showSuccessMessage();
             
         } catch (error) {
-            alert('Erro ao ler o arquivo. Verifique se é um formato válido.');
-            console.error('Erro:', error);
+            console.warn('Arquivo padrão não encontrado:', error);
+            this.showFileNotFound();
+            
+            // Tenta carregar do localStorage como fallback
+            this.loadFromLocalStorage();
         }
     }
 
-    // Processa upload tradicional
+    // Mostra mensagem de sucesso
+    showSuccessMessage() {
+        this.fileInfo.style.display = 'block';
+        this.totalProducts.textContent = this.products.length;
+        
+        // Remove mensagem de erro se existir
+        const errorMsg = document.querySelector('.warning-message');
+        if (errorMsg) {
+            errorMsg.remove();
+        }
+        
+        // Atualiza upload box
+        this.uploadBox.querySelector('h3').textContent = '📁 Arquivo Carregado';
+        this.uploadBox.querySelector('p').textContent = 'CodigoLanchonete.xlsx';
+        
+        const hint = this.uploadBox.querySelector('.upload-hint');
+        if (hint) {
+            hint.textContent = 'As alterações serão salvas automaticamente no arquivo';
+        }
+    }
+
+    // Mostra arquivo não encontrado
+    showFileNotFound() {
+        const uploadBox = this.uploadBox;
+        
+        // Verifica se já existe mensagem
+        if (!document.querySelector('.warning-message')) {
+            const warning = document.createElement('div');
+            warning.className = 'warning-message';
+            warning.innerHTML = `
+                ⚠️ Arquivo <strong>CodigoLanchonete.xlsx</strong> não encontrado na pasta raiz.<br>
+                Faça upload manual de um arquivo ou crie o arquivo na mesma pasta do site.
+            `;
+            uploadBox.appendChild(warning);
+        }
+        
+        uploadBox.querySelector('h3').textContent = '📤 Upload Manual';
+        uploadBox.querySelector('p').textContent = 'Arquivo padrão não encontrado';
+        
+        const hint = uploadBox.querySelector('.upload-hint');
+        if (hint) {
+            hint.textContent = 'Formatos aceitos: CSV, XLS, XLSX';
+        }
+    }
+
+    // Processa upload manual
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (file) {
-            this.fileHandle = null; // Upload tradicional não tem file handle
+            this.fileName = file.name;
             this.processFile(file);
         }
+    }
+
+    // Processa arquivo (comum para todos os métodos)
+    processFile(file) {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                
+                this.parseData(jsonData);
+                this.isFileLoaded = true;
+                this.showSuccessMessage();
+                
+            } catch (error) {
+                alert('Erro ao ler o arquivo. Verifique se é um formato válido (CSV, XLS, XLSX).');
+                console.error('Erro:', error);
+            }
+        };
+        
+        reader.readAsArrayBuffer(file);
     }
 
     // Converte os dados brutos para o formato interno
@@ -284,29 +253,7 @@ class ProductManager {
 
     // Atualiza interface após upload
     updateAfterUpload() {
-        // Mostra informações do arquivo
-        this.fileInfo.style.display = 'block';
         this.totalProducts.textContent = this.products.length;
-        
-        // Atualiza nome do arquivo
-        const fileInfoDiv = document.querySelector('.file-info');
-        let fileNameElement = document.getElementById('currentFileName');
-        if (!fileNameElement) {
-            fileNameElement = document.createElement('div');
-            fileNameElement.id = 'currentFileName';
-            fileNameElement.style.cssText = 'margin-top: 10px; color: #666; font-size: 0.9em;';
-            fileInfoDiv.insertBefore(fileNameElement, fileInfoDiv.querySelector('.file-buttons'));
-        }
-        
-        if (this.currentFileName) {
-            fileNameElement.innerHTML = `📄 Arquivo: <strong>${this.currentFileName}</strong>`;
-        }
-        
-        // Mostra botões de salvamento
-        if (this.saveToFileBtn && this.saveAsBtn) {
-            this.saveToFileBtn.style.display = this.fileHandle ? 'inline-block' : 'none';
-            this.saveAsBtn.style.display = 'inline-block';
-        }
         
         // Habilita botões
         this.findNextBtn.disabled = false;
@@ -315,78 +262,15 @@ class ProductManager {
         // Encontra todos os buracos
         this.findAllHoles();
         
+        // Salva no localStorage como cache
+        this.saveToLocalStorage();
+        
         // Atualiza tabela se estiver visível
         this.renderTable();
-        
-        // Marca como sem alterações
-        this.hasUnsavedChanges = false;
     }
 
-    // Salva no arquivo original (File System Access API)
-    async saveToOriginalFile() {
-        if (!this.fileHandle) {
-            alert('Este arquivo foi carregado via upload tradicional. Use "Salvar Como Novo Arquivo".');
-            return;
-        }
-        
-        try {
-            const writable = await this.fileHandle.createWritable();
-            const content = this.generateExcelBuffer();
-            await writable.write(content);
-            await writable.close();
-            
-            this.hasUnsavedChanges = false;
-            alert('✅ Arquivo salvo com sucesso!');
-            
-        } catch (error) {
-            console.error('Erro ao salvar:', error);
-            alert('Erro ao salvar o arquivo. Tente usar "Salvar Como".');
-        }
-    }
-
-    // Salva como novo arquivo
-    async saveAsNewFile() {
-        try {
-            if ('showSaveFilePicker' in window) {
-                // Usa API moderna
-                const handle = await window.showSaveFilePicker({
-                    suggestedName: this.currentFileName || 'produtos_lanchonete.xlsx',
-                    types: [
-                        {
-                            description: 'Planilha Excel',
-                            accept: {
-                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
-                            }
-                        }
-                    ]
-                });
-                
-                const writable = await handle.createWritable();
-                const content = this.generateExcelBuffer();
-                await writable.write(content);
-                await writable.close();
-                
-                // Atualiza o file handle
-                this.fileHandle = handle;
-                this.hasUnsavedChanges = false;
-                
-                alert('✅ Arquivo salvo com sucesso!');
-                
-            } else {
-                // Fallback para download
-                this.exportToExcel();
-            }
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.error('Erro ao salvar:', error);
-                // Fallback para download
-                this.exportToExcel();
-            }
-        }
-    }
-
-    // Gera buffer Excel para salvamento
-    generateExcelBuffer() {
+    // Gera o Excel para download
+    generateExcel() {
         const exportData = [
             ['Código', 'Descrição', 'UN'],
             ...this.products.map(p => [p.codigo, p.descricao, p.un])
@@ -396,29 +280,127 @@ class ProductManager {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
         
-        // Gera buffer
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        return new Uint8Array(wbout);
+        return wb;
     }
 
-    // Exporta para Excel (método tradicional - download)
-    exportToExcel() {
+    // Download do Excel (visível para o usuário)
+    downloadExcel() {
         if (this.products.length === 0) {
             alert('Não há produtos para exportar.');
             return;
         }
         
-        const exportData = [
-            ['Código', 'Descrição', 'UN'],
-            ...this.products.map(p => [p.codigo, p.descricao, p.un])
-        ];
+        const wb = this.generateExcel();
+        XLSX.writeFile(wb, this.fileName);
         
-        const ws = XLSX.utils.aoa_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
+        // Mostra mensagem
+        this.showSaveConfirmation();
+    }
+
+    // Download silencioso (auto-save)
+    downloadExcelSilent() {
+        if (this.products.length === 0) return;
         
-        XLSX.writeFile(wb, this.currentFileName || 'base_produtos_lanchonete.xlsx');
-        this.hasUnsavedChanges = false;
+        try {
+            const wb = this.generateExcel();
+            XLSX.writeFile(wb, this.fileName);
+        } catch (error) {
+            console.warn('Auto-save falhou:', error);
+        }
+    }
+
+    // Mostra confirmação de salvamento
+    showSaveConfirmation() {
+        // Cria elemento de notificação
+        const notification = document.createElement('div');
+        notification.className = 'save-notification';
+        notification.innerHTML = '✅ Arquivo salvo com sucesso!';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease, fadeOut 0.5s ease 2s forwards;
+            font-weight: 600;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove após animação
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+        
+        // Adiciona estilos de animação se não existirem
+        if (!document.getElementById('notification-styles')) {
+            const style = document.createElement('style');
+            style.id = 'notification-styles';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+
+    // Verifica se há alterações não salvas
+    hasUnsavedChanges() {
+        const savedData = localStorage.getItem('productData');
+        if (!savedData) return true;
+        
+        try {
+            const savedProducts = JSON.parse(savedData);
+            return JSON.stringify(this.products) !== JSON.stringify(savedProducts);
+        } catch {
+            return true;
+        }
+    }
+
+    // Salva no localStorage (cache)
+    saveToLocalStorage() {
+        try {
+            localStorage.setItem('productData', JSON.stringify(this.products));
+        } catch (error) {
+            console.warn('Não foi possível salvar no localStorage:', error);
+        }
+    }
+
+    // Carrega do localStorage (fallback)
+    loadFromLocalStorage() {
+        try {
+            const savedData = localStorage.getItem('productData');
+            if (savedData) {
+                this.products = JSON.parse(savedData);
+                this.products.sort((a, b) => a.codigo - b.codigo);
+                this.updateAfterUpload();
+                this.isFileLoaded = true;
+                
+                console.log('Dados carregados do cache local');
+                
+                // Atualiza interface
+                this.fileInfo.style.display = 'block';
+                this.uploadBox.querySelector('h3').textContent = '💾 Dados em Cache';
+                this.uploadBox.querySelector('p').textContent = 'Usando dados salvos localmente';
+                
+                const hint = this.uploadBox.querySelector('.upload-hint');
+                if (hint) {
+                    hint.textContent = 'Faça upload de um arquivo para atualizar';
+                }
+            }
+        } catch (error) {
+            console.warn('Não foi possível carregar do localStorage:', error);
+        }
     }
 
     // Encontra todos os buracos na sequência
@@ -444,6 +426,11 @@ class ProductManager {
 
     // Encontra o próximo buraco
     findNextHole() {
+        if (!this.isFileLoaded || this.products.length === 0) {
+            alert('Carregue um arquivo primeiro!');
+            return;
+        }
+        
         if (this.holes.length === 0) {
             this.resultsContainer.style.display = 'none';
             this.noResults.style.display = 'block';
@@ -517,22 +504,18 @@ class ProductManager {
         this.products.push(newProduct);
         this.products.sort((a, b) => a.codigo - b.codigo);
         
-        this.hasUnsavedChanges = true;
         this.findAllHoles();
         this.updateAfterSave();
         
-        alert('Produto adicionado com sucesso!');
-        
-        // Auto-save se tiver file handle
-        if (this.fileHandle && confirm('Deseja salvar a alteração no arquivo original?')) {
-            this.saveToOriginalFile();
-        }
+        // Auto-download do arquivo atualizado
+        this.downloadExcel();
     }
 
     // Atualiza interface após salvar
     updateAfterSave() {
         this.renderTable();
         this.totalProducts.textContent = this.products.length;
+        this.saveToLocalStorage();
         
         if (this.holes.length === 0) {
             this.resultsContainer.style.display = 'none';
@@ -542,43 +525,6 @@ class ProductManager {
                 this.currentHoleIndex = this.holes.length - 1;
             }
             this.displayCurrentHole();
-        }
-        
-        // Atualiza indicador de alterações
-        this.updateSaveIndicator();
-    }
-
-    // Atualiza indicador visual de alterações não salvas
-    updateSaveIndicator() {
-        if (this.hasUnsavedChanges && this.fileHandle) {
-            document.title = '⚠️ Gerenciador de Códigos - Alterações não salvas';
-            
-            // Adiciona indicador na interface
-            let indicator = document.getElementById('unsavedIndicator');
-            if (!indicator) {
-                indicator = document.createElement('div');
-                indicator.id = 'unsavedIndicator';
-                indicator.className = 'unsaved-indicator';
-                indicator.innerHTML = '⚠️ Alterações não salvas no arquivo original';
-                indicator.style.cssText = `
-                    background: #fff3cd;
-                    color: #856404;
-                    padding: 8px 15px;
-                    border-radius: 5px;
-                    margin: 10px 0;
-                    text-align: center;
-                    font-weight: bold;
-                `;
-                const mainContent = document.querySelector('.main-content');
-                mainContent.insertBefore(indicator, mainContent.firstChild);
-            }
-            indicator.style.display = 'block';
-        } else {
-            document.title = '🍔 Gerenciador de Códigos';
-            const indicator = document.getElementById('unsavedIndicator');
-            if (indicator) {
-                indicator.style.display = 'none';
-            }
         }
     }
 
@@ -655,14 +601,11 @@ class ProductManager {
                     const newValue = input.value.trim();
                     if (newValue && newValue !== currentValue) {
                         this.products[index][field] = newValue.toUpperCase();
-                        this.hasUnsavedChanges = true;
-                        this.updateSaveIndicator();
+                        this.saveToLocalStorage();
                         this.renderTable();
                         
-                        // Auto-save
-                        if (this.fileHandle && confirm('Deseja salvar a alteração no arquivo original?')) {
-                            this.saveToOriginalFile();
-                        }
+                        // Auto-download
+                        this.downloadExcel();
                     } else {
                         cell.textContent = currentValue;
                     }
@@ -682,16 +625,13 @@ class ProductManager {
     deleteProduct(index) {
         if (confirm('Tem certeza que deseja excluir este produto?')) {
             this.products.splice(index, 1);
-            this.hasUnsavedChanges = true;
             this.findAllHoles();
             this.renderTable();
             this.totalProducts.textContent = this.products.length;
-            this.updateSaveIndicator();
+            this.saveToLocalStorage();
             
-            // Auto-save
-            if (this.fileHandle && confirm('Deseja salvar a exclusão no arquivo original?')) {
-                this.saveToOriginalFile();
-            }
+            // Auto-download
+            this.downloadExcel();
         }
     }
 
@@ -714,7 +654,30 @@ class ProductManager {
     }
 }
 
-// Inicializa a aplicação
+// ============================================
+// INICIALIZAÇÃO
+// ============================================
 document.addEventListener('DOMContentLoaded', () => {
     window.productManager = new ProductManager();
+    
+    // Adiciona botão de salvamento manual no header
+    const header = document.querySelector('.header');
+    const saveButtonContainer = document.createElement('div');
+    saveButtonContainer.style.cssText = `
+        margin-top: 15px;
+        position: relative;
+        z-index: 1;
+    `;
+    
+    const saveButton = document.createElement('button');
+    saveButton.className = 'btn btn-success';
+    saveButton.innerHTML = '💾 Salvar Arquivo Agora';
+    saveButton.onclick = () => {
+        if (window.productManager && window.productManager.products.length > 0) {
+            window.productManager.downloadExcel();
+        }
+    };
+    
+    saveButtonContainer.appendChild(saveButton);
+    header.appendChild(saveButtonContainer);
 });
