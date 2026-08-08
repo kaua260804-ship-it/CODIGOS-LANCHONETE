@@ -3,7 +3,7 @@ const CONFIG = {
     SPREADSHEET_ID: '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54',
     SHEET_NAME: 'BASE',
     RANGE: 'A:C',
-    CLIENT_ID: '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com',
+    CLIENT_ID: '108107715979-uuq9irtebbjcvgnctbd0aedie659a3j4.apps.googleusercontent.com',
     API_KEY: 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0',
     SCOPES: 'https://www.googleapis.com/auth/spreadsheets',
     DISCOVERY_DOC: 'https://sheets.googleapis.com/$discovery/rest?version=v4'
