@@ -3,7 +3,7 @@ const SPREADSHEET_ID = '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54';
 const SHEET_NAME = 'BASE';
 const RANGE = 'A:C';
 const CLIENT_ID = '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com';
-const API_KEY = 'SUA_API_KEY';
+const API_KEY = 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
 let accessToken = null;
