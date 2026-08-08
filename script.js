@@ -10,7 +10,7 @@ class ProductManager {
         this.SHEET_NAME = 'Sheet1'; // Nome da aba da planilha
         
         // Configuração OAuth
-        this.CLIENT_ID = 'SEU_CLIENT_ID.apps.googleusercontent.com';
+        this.CLIENT_ID = '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com';
         this.REDIRECT_URI = 'https://kaua260804-ship-it.github.io/CODIGOS-LANCHONETE';
         
         // Estado da aplicação
