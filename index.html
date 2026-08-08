@@ -28,7 +28,7 @@
 
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <p id="loading-message">Carregando dados da planilha...</p>
+            <p id="loading-message">Carregando...</p>
         </div>
 
         <div id="login-message" class="login-message">
@@ -130,12 +130,7 @@
         <div id="error-message" class="error-message" style="display: none;"></div>
     </div>
 
-    <!-- IMPORTANTE: Carregar nesta ordem -->
-    <!-- 1. Google API (gapi) -->
-    <script src="https://apis.google.com/js/api.js" onload="onGapiLoad()"></script>
-    <!-- 2. Google Identity Services (GIS) -->
-    <script src="https://accounts.google.com/gsi/client" onload="onGisLoad()"></script>
-    <!-- 3. Script da aplicação -->
+    <script src="https://apis.google.com/js/api.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
