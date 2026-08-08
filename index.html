@@ -16,9 +16,10 @@
         <header>
             <h1>🍔 Sistema de Gestão - Lanchonete</h1>
             <div class="auth-section">
-                <div id="google-signin-btn"></div>
+                <!-- Container para o botão do Google -->
+                <div id="google-signin-container"></div>
                 <button id="logout-btn" class="logout-btn" style="display: none;">
-                    <span id="user-name"></span> | Sair
+                    <span id="user-name">Usuário</span> | Sair
                 </button>
             </div>
         </header>
@@ -132,9 +133,9 @@
         <div id="error-message" class="error-message" style="display: none;"></div>
     </div>
 
-    <!-- Google API Scripts -->
+    <!-- Google API Scripts - Carregados em ordem específica -->
+    <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" onload="onGoogleApiLoad()"></script>
     <script src="script.js"></script>
 </body>
 </html>
