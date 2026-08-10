@@ -23,21 +23,18 @@ let state = {
 
 // --- CARREGAMENTO DAS BIBLIOTECAS DO GOOGLE ---
 
-// Função chamada pelo index.html quando o api.js carrega
 window.onGapiLoad = function() {
     console.log('✅ Google API (gapi) carregada');
     state.gapiLoaded = true;
     initGapiClient();
 };
 
-// Função chamada pelo index.html quando o gsi/client carrega
 window.onGisLoad = function() {
     console.log('✅ Google Identity Services (GIS) carregado');
     state.gisLoaded = true;
     checkAllLoaded();
 };
 
-// Inicializa o gapi client de forma assíncrona limpa (sem parâmetros de timeout inválidos)
 async function initGapiClient() {
     try {
         await new Promise((resolve, reject) => {
@@ -62,7 +59,6 @@ async function initGapiClient() {
     }
 }
 
-// Libera a aplicação assim que o GAPI e o GIS estiverem 100% prontos
 function checkAllLoaded() {
     if (state.gapiLoaded && state.gisLoaded) {
         console.log('🚀 Bibliotecas prontas! Inicializando app...');
@@ -70,7 +66,6 @@ function checkAllLoaded() {
     }
 }
 
-// Inicializa os manipuladores e a autenticação do Google Identity
 function initApp() {
     const authorizeBtn = document.getElementById('authorize-btn');
     if (authorizeBtn) authorizeBtn.addEventListener('click', handleAuthClick);
@@ -109,7 +104,8 @@ function initApp() {
         console.error('❌ Erro ao configurar GIS Token Client:', error);
     }
 
-    checkExistingSession();
+    // NÃO restaurar sessão automaticamente - esperar o usuário clicar em login
+    // checkExistingSession(); // REMOVIDO
 }
 
 function setupForms() {
@@ -119,24 +115,6 @@ function setupForms() {
     const editForm = document.getElementById('edit-form');
     if (editForm) editForm.addEventListener('submit', handleEditProduct);
 }
-
-function checkExistingSession() {
-    const savedToken = sessionStorage.getItem('google_access_token');
-    if (savedToken) {
-        console.log('🔑 Restaurando sessão anterior...');
-        state.accessToken = savedToken;
-        state.isAuthenticated = true;
-        
-        if (gapi.client) {
-            gapi.client.setToken({ access_token: savedToken });
-        }
-        
-        updateUIForAuth();
-        loadSheetData();
-    }
-}
-
-// --- FLUXO DE LOGIN E LOGOUT ---
 
 function handleAuthClick() {
     if (typeof google === 'undefined') {
@@ -173,12 +151,20 @@ function handleSignoutClick() {
 // --- OPERAÇÕES COM GOOGLE SHEETS API ---
 
 async function loadSheetData() {
-    if (!state.isAuthenticated) return;
+    if (!state.isAuthenticated || !state.accessToken) {
+        console.log('⚠️ Tentando carregar dados sem autenticação. Ignorando.');
+        return;
+    }
     
     showLoading(true, 'Buscando dados da planilha BASE...');
     hideError();
 
     try {
+        // Garantir que o token está configurado
+        if (!gapi.client.getToken()) {
+            gapi.client.setToken({ access_token: state.accessToken });
+        }
+
         const response = await gapi.client.sheets.spreadsheets.values.get({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
             range: `${CONFIG.SHEET_NAME}!${CONFIG.RANGE}`,
@@ -229,6 +215,10 @@ async function loadSheetData() {
 }
 
 async function appendToSheet(values) {
+    if (!gapi.client.getToken()) {
+        gapi.client.setToken({ access_token: state.accessToken });
+    }
+    
     await gapi.client.sheets.spreadsheets.values.append({
         spreadsheetId: CONFIG.SPREADSHEET_ID,
         range: `${CONFIG.SHEET_NAME}!A:C`,
@@ -239,6 +229,10 @@ async function appendToSheet(values) {
 }
 
 async function updateSheetCell(row, values) {
+    if (!gapi.client.getToken()) {
+        gapi.client.setToken({ access_token: state.accessToken });
+    }
+    
     await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: CONFIG.SPREADSHEET_ID,
         range: `${CONFIG.SHEET_NAME}!A${row}:C${row}`,
@@ -261,14 +255,12 @@ function findHoles() {
         return;
     }
 
-    // Varre do menor ao maior código procurando falhas na sequência
     for (let i = codes[0]; i < codes[codes.length - 1]; i++) {
         if (!codes.includes(i)) {
             state.holes.push(i);
         }
     }
 
-    // Adiciona também o próximo código imediatamente após o maior existente
     const nextCode = codes[codes.length - 1] + 1;
     if (!state.holes.includes(nextCode)) {
         state.holes.push(nextCode);
@@ -453,6 +445,9 @@ function showError(message) {
     if (errorDiv) {
         errorDiv.textContent = '❌ ' + message;
         errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 8000);
     }
 }
 
