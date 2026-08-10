@@ -1,15 +1,15 @@
-// Configurações (Mantendo suas credenciais originais)
+// Configurações da Aplicação e Google API
 const CONFIG = {
     SPREADSHEET_ID: '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54',
     SHEET_NAME: 'BASE',
     RANGE: 'A:C',
-    CLIENT_ID: '108107715979-uuq9irtebbjcvgnctbd0aedie659a3j4.apps.googleusercontent.com',
+    CLIENT_ID: '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com',
     API_KEY: 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0',
     SCOPES: 'https://www.googleapis.com/auth/spreadsheets',
     DISCOVERY_DOC: 'https://sheets.googleapis.com/$discovery/rest?version=v4'
 };
 
-// Estado da aplicação
+// Estado Global da Aplicação
 let state = {
     accessToken: null,
     isAuthenticated: false,
@@ -21,56 +21,56 @@ let state = {
     gisLoaded: false
 };
 
-// --- INICIALIZAÇÃO DO GOOGLE ---
+// --- CARREGAMENTO DAS BIBLIOTECAS DO GOOGLE ---
 
-// Chamado pelo index.html quando a api.js carrega
+// Função chamada pelo index.html quando o api.js carrega
 window.onGapiLoad = function() {
     console.log('✅ Google API (gapi) carregada');
     state.gapiLoaded = true;
     initGapiClient();
 };
 
-// Chamado pelo index.html quando o gsi/client carrega
+// Função chamada pelo index.html quando o gsi/client carrega
 window.onGisLoad = function() {
     console.log('✅ Google Identity Services (GIS) carregado');
     state.gisLoaded = true;
     checkAllLoaded();
 };
 
+// Inicializa o gapi client de forma assíncrona limpa (sem parâmetros de timeout inválidos)
 async function initGapiClient() {
     try {
         await new Promise((resolve, reject) => {
-            gapi.load('client', {
-                callback: async () => {
-                    try {
-                        await gapi.client.init({
-                            apiKey: CONFIG.API_KEY,
-                            discoveryDocs: [CONFIG.DISCOVERY_DOC],
-                        });
-                        console.log('✅ gapi client inicializado');
-                        resolve();
-                    } catch (error) {
-                        reject(error);
-                    }
-                },
-                onerror: () => reject(new Error('Erro ao carregar gapi client')),
-                timeout: 10000
+            gapi.load('client', async () => {
+                try {
+                    await gapi.client.init({
+                        apiKey: CONFIG.API_KEY,
+                        discoveryDocs: [CONFIG.DISCOVERY_DOC],
+                    });
+                    console.log('✅ gapi client inicializado com sucesso');
+                    resolve();
+                } catch (error) {
+                    console.error('❌ Erro no gapi.client.init:', error);
+                    reject(error);
+                }
             });
         });
         checkAllLoaded();
     } catch (error) {
         console.error('❌ Erro ao inicializar gapi:', error);
-        showError('Erro de API. Verifique a API Key e se a Sheets API está ativa no Google Cloud.');
+        showError('Erro ao inicializar Google API. Verifique a API Key no Google Cloud.');
     }
 }
 
+// Libera a aplicação assim que o GAPI e o GIS estiverem 100% prontos
 function checkAllLoaded() {
     if (state.gapiLoaded && state.gisLoaded) {
-        console.log('✅ Todas as bibliotecas do Google prontas, liberando App...');
+        console.log('🚀 Bibliotecas prontas! Inicializando app...');
         initApp();
     }
 }
 
+// Inicializa os manipuladores e a autenticação do Google Identity
 function initApp() {
     const authorizeBtn = document.getElementById('authorize-btn');
     if (authorizeBtn) authorizeBtn.addEventListener('click', handleAuthClick);
@@ -80,27 +80,33 @@ function initApp() {
 
     setupForms();
 
-    // Inicializa o cliente de Login do Google
     try {
         state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CONFIG.CLIENT_ID,
             scope: CONFIG.SCOPES,
             callback: async (tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
+                    console.log('🔑 Login efetuado com sucesso!');
                     state.accessToken = tokenResponse.access_token;
                     state.isAuthenticated = true;
+                    
                     sessionStorage.setItem('google_access_token', tokenResponse.access_token);
-                    gapi.client.setToken({ access_token: state.accessToken });
+                    
+                    if (gapi.client) {
+                        gapi.client.setToken({ access_token: state.accessToken });
+                    }
+                    
                     updateUIForAuth();
                     await loadSheetData();
                 }
             },
             error_callback: (error) => {
-                showError('Erro ao autenticar: ' + (error.message || 'Desconhecido'));
+                console.error('❌ Erro de Autenticação:', error);
+                showError('Erro na autenticação: ' + (error.message || 'Janela fechada ou acesso negado.'));
             }
         });
     } catch (error) {
-        console.error('❌ Erro ao configurar o Token Client:', error);
+        console.error('❌ Erro ao configurar GIS Token Client:', error);
     }
 
     checkExistingSession();
@@ -117,23 +123,28 @@ function setupForms() {
 function checkExistingSession() {
     const savedToken = sessionStorage.getItem('google_access_token');
     if (savedToken) {
+        console.log('🔑 Restaurando sessão anterior...');
         state.accessToken = savedToken;
         state.isAuthenticated = true;
-        gapi.client.setToken({ access_token: savedToken });
+        
+        if (gapi.client) {
+            gapi.client.setToken({ access_token: savedToken });
+        }
+        
         updateUIForAuth();
         loadSheetData();
     }
 }
 
-// --- FLUXO DE LOGIN ---
+// --- FLUXO DE LOGIN E LOGOUT ---
 
 function handleAuthClick() {
     if (typeof google === 'undefined') {
-        showError('Biblioteca de login do Google bloqueada. Desative o AdBlocker!');
+        showError('A biblioteca de login do Google foi bloqueada. Desative extensoes de AdBlock.');
         return;
     }
     if (!state.tokenClient) {
-        showError('Aguarde um momento, o login ainda está carregando...');
+        showError('O sistema de login ainda está inicializando. Aguarde 2 segundos...');
         return;
     }
     state.tokenClient.requestAccessToken();
@@ -144,22 +155,27 @@ function handleSignoutClick() {
         google.accounts.oauth2.revoke(state.accessToken, () => {});
         sessionStorage.removeItem('google_access_token');
     }
+    
     state.accessToken = null;
     state.isAuthenticated = false;
     state.products = [];
-    gapi.client.setToken(null);
+    state.holes = [];
+
+    if (gapi.client) {
+        gapi.client.setToken(null);
+    }
 
     document.getElementById('app-content').style.display = 'none';
     document.getElementById('login-message').style.display = 'block';
     updateUIForAuth();
 }
 
-// --- INTEGRAÇÃO COM PLANILHA (SHEETS API) ---
+// --- OPERAÇÕES COM GOOGLE SHEETS API ---
 
 async function loadSheetData() {
     if (!state.isAuthenticated) return;
     
-    showLoading(true, 'Carregando planilha...');
+    showLoading(true, 'Buscando dados da planilha BASE...');
     hideError();
 
     try {
@@ -178,17 +194,17 @@ async function loadSheetData() {
 
                 state.products.push({
                     row: i + 1,
-                    code: data[i][0],
-                    description: data[i][1] || '',
-                    un: data[i][2] || ''
+                    code: data[i][0].toString().trim(),
+                    description: data[i][1] ? data[i][1].toString().trim() : '',
+                    un: data[i][2] ? data[i][2].toString().trim() : ''
                 });
             }
         }
 
-        // Ordenação numérica
+        // Ordenação estritamente numérica
         state.products.sort((a, b) => {
-            const numA = parseInt(a.code);
-            const numB = parseInt(b.code);
+            const numA = parseInt(a.code, 10);
+            const numB = parseInt(b.code, 10);
             return (!isNaN(numA) && !isNaN(numB)) ? numA - numB : a.code.localeCompare(b.code);
         });
 
@@ -201,12 +217,12 @@ async function loadSheetData() {
         document.getElementById('app-content').style.display = 'block';
 
     } catch (error) {
-        console.error(error);
+        console.error('❌ Erro na leitura:', error);
         if (error.status === 401 || error.status === 403) {
-            showError('Sessão expirada. Faça login novamente.');
+            showError('Sessão expirada ou sem permissão na planilha. Faça login novamente.');
             handleSignoutClick();
         } else {
-            showError('Erro ao carregar planilha.');
+            showError('Erro ao carregar os dados da planilha.');
         }
         showLoading(false);
     }
@@ -231,12 +247,12 @@ async function updateSheetCell(row, values) {
     });
 }
 
-// --- LÓGICA DE BURACOS (CÓDIGOS FALTANTES) ---
+// --- LÓGICA DE DETECÇÃO DE BURACOS (CÓDIGOS FALTANTES) ---
 
 function findHoles() {
     state.holes = [];
     const codes = state.products
-        .map(p => parseInt(p.code))
+        .map(p => parseInt(p.code, 10))
         .filter(code => !isNaN(code))
         .sort((a, b) => a - b);
 
@@ -245,38 +261,54 @@ function findHoles() {
         return;
     }
 
+    // Varre do menor ao maior código procurando falhas na sequência
     for (let i = codes[0]; i < codes[codes.length - 1]; i++) {
-        if (!codes.includes(i)) state.holes.push(i);
+        if (!codes.includes(i)) {
+            state.holes.push(i);
+        }
     }
 
+    // Adiciona também o próximo código imediatamente após o maior existente
     const nextCode = codes[codes.length - 1] + 1;
-    if (!state.holes.includes(nextCode)) state.holes.push(nextCode);
+    if (!state.holes.includes(nextCode)) {
+        state.holes.push(nextCode);
+    }
     
     state.currentHoleIndex = 0;
 }
 
 function updateHoleDisplay() {
+    const holeDisplay = document.getElementById('current-hole');
+    const totalHoles = document.getElementById('total-holes');
+    const holeCodeInput = document.getElementById('hole-code');
+
     if (state.holes.length > 0 && state.currentHoleIndex < state.holes.length) {
         const currentHole = state.holes[state.currentHoleIndex];
-        document.getElementById('current-hole').textContent = currentHole;
-        document.getElementById('hole-code').value = currentHole;
-        document.getElementById('total-holes').textContent = state.holes.length;
+        if (holeDisplay) holeDisplay.textContent = currentHole;
+        if (holeCodeInput) holeCodeInput.value = currentHole;
+        if (totalHoles) totalHoles.textContent = state.holes.length;
     } else {
-        document.getElementById('current-hole').textContent = '--';
-        document.getElementById('hole-code').value = '';
-        document.getElementById('total-holes').textContent = '0';
+        if (holeDisplay) holeDisplay.textContent = '--';
+        if (holeCodeInput) holeCodeInput.value = '';
+        if (totalHoles) totalHoles.textContent = '0';
     }
 }
 
 function showNextHole() {
-    if (state.holes.length === 0) return;
+    if (state.holes.length === 0) {
+        alert('Nenhum código faltante encontrado na sequência.');
+        return;
+    }
     state.currentHoleIndex = (state.currentHoleIndex + 1) % state.holes.length;
     updateHoleDisplay();
-    document.getElementById('hole-description').value = '';
-    document.getElementById('hole-un').value = '';
+    
+    const descInput = document.getElementById('hole-description');
+    const unInput = document.getElementById('hole-un');
+    if (descInput) descInput.value = '';
+    if (unInput) unInput.value = '';
 }
 
-// --- EVENTOS DE INTERFACE ---
+// --- FORMULÁRIOS E MANIPULAÇÃO DA INTERFACE ---
 
 async function handleAddProduct(e) {
     e.preventDefault();
@@ -286,9 +318,12 @@ async function handleAddProduct(e) {
     const description = document.getElementById('hole-description').value.trim();
     const un = document.getElementById('hole-un').value.trim();
 
-    if (!code || !description || !un) return;
+    if (!code || !description || !un) {
+        alert('Por favor, preencha todos os campos!');
+        return;
+    }
 
-    showLoading(true, 'Salvando...');
+    showLoading(true, 'Salvando novo produto na planilha...');
     try {
         const existingProduct = state.products.find(p => p.code === code);
         if (existingProduct) {
@@ -296,14 +331,16 @@ async function handleAddProduct(e) {
         } else {
             await appendToSheet([code, description, un]);
         }
+        
         await loadSheetData();
         document.getElementById('hole-description').value = '';
         document.getElementById('hole-un').value = '';
-        alert('Produto salvo!');
+        alert('✅ Produto gravado com sucesso no Google Sheets!');
     } catch (error) {
-        showError('Erro ao salvar produto.');
+        console.error('Erro ao salvar:', error);
+        showError('Erro ao gravar produto na planilha.');
+        showLoading(false);
     }
-    showLoading(false);
 }
 
 async function handleEditProduct(e) {
@@ -315,16 +352,17 @@ async function handleEditProduct(e) {
     const description = document.getElementById('edit-description').value.trim();
     const un = document.getElementById('edit-un').value.trim();
 
-    showLoading(true, 'Atualizando...');
+    showLoading(true, 'Atualizando linha na planilha...');
     try {
         await updateSheetCell(row, [code, description, un]);
         await loadSheetData();
         closeEditModal();
-        alert('Produto atualizado!');
+        alert('✅ Produto atualizado!');
     } catch (error) {
+        console.error('Erro ao editar:', error);
         showError('Erro ao atualizar produto.');
+        showLoading(false);
     }
-    showLoading(false);
 }
 
 function updateTable(filterText = '') {
@@ -340,7 +378,7 @@ function updateTable(filterText = '') {
         : state.products;
 
     if (filteredProducts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum produto</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum produto cadastrado</td></tr>';
         return;
     }
 
@@ -348,7 +386,7 @@ function updateTable(filterText = '') {
         const tr = document.createElement('tr');
         const safeProduct = JSON.stringify(product).replace(/'/g, "&#39;").replace(/"/g, '&quot;');
         tr.innerHTML = `
-            <td>${product.code}</td>
+            <td><strong>${product.code}</strong></td>
             <td>${product.description}</td>
             <td>${product.un}</td>
             <td><button class="edit-btn" onclick='editProduct(${safeProduct})'>✏️ Editar</button></td>
@@ -358,7 +396,8 @@ function updateTable(filterText = '') {
 }
 
 function filterTable() {
-    updateTable(document.getElementById('table-search').value);
+    const text = document.getElementById('table-search').value;
+    updateTable(text);
 }
 
 function editProduct(product) {
@@ -376,6 +415,7 @@ function closeEditModal() {
 function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    
     if (tabName === 'search') {
         document.querySelectorAll('.tab-btn')[0].classList.add('active');
         document.getElementById('search-tab').classList.add('active');
@@ -413,7 +453,6 @@ function showError(message) {
     if (errorDiv) {
         errorDiv.textContent = '❌ ' + message;
         errorDiv.style.display = 'block';
-        setTimeout(() => errorDiv.style.display = 'none', 5000);
     }
 }
 
