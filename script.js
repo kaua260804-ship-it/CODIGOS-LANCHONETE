@@ -1,15 +1,22 @@
-// Configurações da Aplicação e Google API
+// ==========================================
+// CONFIGURAÇÕES DA APLICAÇÃO E GOOGLE API
+// ==========================================
 const CONFIG = {
     SPREADSHEET_ID: '1UEGdjjJ416O4SdqtBhncViDwS7E-wId-LFa9HpV9D54',
     SHEET_NAME: 'BASE',
     RANGE: 'A:C',
     CLIENT_ID: '32531060917-d8sek11tkrmq3u5jaqhni6ri0ujvr3ff.apps.googleusercontent.com',
-    API_KEY: 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0',
+    
+    // ATENÇÃO: Garanta que esta API Key pertence ao MESMO projeto do Client ID (KPY-IA-Projeto) no Google Cloud Console!
+    API_KEY: 'AIzaSyDObnjtRPUZc7_oiEWA41MNeej_IXkklr0', 
+    
     SCOPES: 'https://www.googleapis.com/auth/spreadsheets',
     DISCOVERY_DOC: 'https://sheets.googleapis.com/$discovery/rest?version=v4'
 };
 
-// Estado Global da Aplicação
+// ==========================================
+// ESTADO GLOBAL DA APLICAÇÃO
+// ==========================================
 let state = {
     accessToken: null,
     isAuthenticated: false,
@@ -21,20 +28,24 @@ let state = {
     gisLoaded: false
 };
 
-// --- CARREGAMENTO DAS BIBLIOTECAS DO GOOGLE ---
+// ==========================================
+// INICIALIZAÇÃO DAS BIBLIOTECAS DO GOOGLE
+// ==========================================
 
+// Called by index.html when api.js loads
 window.onGapiLoad = function() {
-    console.log('✅ Google API (gapi) carregada');
-    state.gapiLoaded = true;
+    console.log('✅ Google API (gapi) script carregado');
     initGapiClient();
 };
 
+// Called by index.html when gsi/client loads
 window.onGisLoad = function() {
-    console.log('✅ Google Identity Services (GIS) carregado');
+    console.log('✅ Google Identity Services (GIS) script carregado');
     state.gisLoaded = true;
     checkAllLoaded();
 };
 
+// Inicializa o gapi client e carrega as descobertas da Sheets API
 async function initGapiClient() {
     try {
         await new Promise((resolve, reject) => {
@@ -44,7 +55,8 @@ async function initGapiClient() {
                         apiKey: CONFIG.API_KEY,
                         discoveryDocs: [CONFIG.DISCOVERY_DOC],
                     });
-                    console.log('✅ gapi client inicializado com sucesso');
+                    console.log('✅ gapi client inicializado com sucesso!');
+                    state.gapiLoaded = true; // Só marca como carregado APÓS o init concluir
                     resolve();
                 } catch (error) {
                     console.error('❌ Erro no gapi.client.init:', error);
@@ -55,17 +67,19 @@ async function initGapiClient() {
         checkAllLoaded();
     } catch (error) {
         console.error('❌ Erro ao inicializar gapi:', error);
-        showError('Erro ao inicializar Google API. Verifique a API Key no Google Cloud.');
+        showError('Erro de inicialização da API. Verifique a API Key e se a Sheets API está ativa no Google Cloud.');
     }
 }
 
+// Libera a aplicação apenas quando AMBAS as bibliotecas estiverem 100% prontas
 function checkAllLoaded() {
     if (state.gapiLoaded && state.gisLoaded) {
-        console.log('🚀 Bibliotecas prontas! Inicializando app...');
+        console.log('🚀 Bibliotecas Google prontas! Inicializando app...');
         initApp();
     }
 }
 
+// Configura os botões, eventos de formulário e o cliente OAuth
 function initApp() {
     const authorizeBtn = document.getElementById('authorize-btn');
     if (authorizeBtn) authorizeBtn.addEventListener('click', handleAuthClick);
@@ -104,8 +118,7 @@ function initApp() {
         console.error('❌ Erro ao configurar GIS Token Client:', error);
     }
 
-    // NÃO restaurar sessão automaticamente - esperar o usuário clicar em login
-    // checkExistingSession(); // REMOVIDO
+    checkExistingSession();
 }
 
 function setupForms() {
@@ -116,13 +129,33 @@ function setupForms() {
     if (editForm) editForm.addEventListener('submit', handleEditProduct);
 }
 
+function checkExistingSession() {
+    const savedToken = sessionStorage.getItem('google_access_token');
+    if (savedToken) {
+        console.log('🔑 Restaurando sessão anterior...');
+        state.accessToken = savedToken;
+        state.isAuthenticated = true;
+        
+        if (gapi.client) {
+            gapi.client.setToken({ access_token: savedToken });
+        }
+        
+        updateUIForAuth();
+        loadSheetData();
+    }
+}
+
+// ==========================================
+// FLUXO DE LOGIN E LOGOUT
+// ==========================================
+
 function handleAuthClick() {
     if (typeof google === 'undefined') {
-        showError('A biblioteca de login do Google foi bloqueada. Desative extensoes de AdBlock.');
+        showError('A biblioteca de login do Google foi bloqueada por extensões do seu navegador.');
         return;
     }
     if (!state.tokenClient) {
-        showError('O sistema de login ainda está inicializando. Aguarde 2 segundos...');
+        showError('O sistema de login ainda está inicializando. Aguarde 2 segundos e tente novamente.');
         return;
     }
     state.tokenClient.requestAccessToken();
@@ -148,23 +181,24 @@ function handleSignoutClick() {
     updateUIForAuth();
 }
 
-// --- OPERAÇÕES COM GOOGLE SHEETS API ---
+// ==========================================
+// OPERAÇÕES COM A GOOGLE SHEETS API
+// ==========================================
 
 async function loadSheetData() {
-    if (!state.isAuthenticated || !state.accessToken) {
-        console.log('⚠️ Tentando carregar dados sem autenticação. Ignorando.');
+    if (!state.isAuthenticated) return;
+    
+    // Trava de segurança para garantir que o cliente de planilhas existe
+    if (!gapi.client || !gapi.client.sheets) {
+        console.warn('⚠️ Aguardando inicialização completa do gapi.client.sheets...');
+        setTimeout(loadSheetData, 500);
         return;
     }
-    
+
     showLoading(true, 'Buscando dados da planilha BASE...');
     hideError();
 
     try {
-        // Garantir que o token está configurado
-        if (!gapi.client.getToken()) {
-            gapi.client.setToken({ access_token: state.accessToken });
-        }
-
         const response = await gapi.client.sheets.spreadsheets.values.get({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
             range: `${CONFIG.SHEET_NAME}!${CONFIG.RANGE}`,
@@ -207,6 +241,8 @@ async function loadSheetData() {
         if (error.status === 401 || error.status === 403) {
             showError('Sessão expirada ou sem permissão na planilha. Faça login novamente.');
             handleSignoutClick();
+        } else if (error.status === 400) {
+            showError('Erro 400: Verifique se a sua API Key e Client ID são do mesmo projeto no Google Cloud Console.');
         } else {
             showError('Erro ao carregar os dados da planilha.');
         }
@@ -215,10 +251,6 @@ async function loadSheetData() {
 }
 
 async function appendToSheet(values) {
-    if (!gapi.client.getToken()) {
-        gapi.client.setToken({ access_token: state.accessToken });
-    }
-    
     await gapi.client.sheets.spreadsheets.values.append({
         spreadsheetId: CONFIG.SPREADSHEET_ID,
         range: `${CONFIG.SHEET_NAME}!A:C`,
@@ -229,10 +261,6 @@ async function appendToSheet(values) {
 }
 
 async function updateSheetCell(row, values) {
-    if (!gapi.client.getToken()) {
-        gapi.client.setToken({ access_token: state.accessToken });
-    }
-    
     await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: CONFIG.SPREADSHEET_ID,
         range: `${CONFIG.SHEET_NAME}!A${row}:C${row}`,
@@ -241,7 +269,9 @@ async function updateSheetCell(row, values) {
     });
 }
 
-// --- LÓGICA DE DETECÇÃO DE BURACOS (CÓDIGOS FALTANTES) ---
+// ==========================================
+// DETECÇÃO DE BURACOS (CÓDIGOS FALTANTES)
+// ==========================================
 
 function findHoles() {
     state.holes = [];
@@ -255,12 +285,14 @@ function findHoles() {
         return;
     }
 
+    // Identifica falhas na sequência numérica
     for (let i = codes[0]; i < codes[codes.length - 1]; i++) {
         if (!codes.includes(i)) {
             state.holes.push(i);
         }
     }
 
+    // Adiciona também o próximo código da sequência final
     const nextCode = codes[codes.length - 1] + 1;
     if (!state.holes.includes(nextCode)) {
         state.holes.push(nextCode);
@@ -300,7 +332,9 @@ function showNextHole() {
     if (unInput) unInput.value = '';
 }
 
-// --- FORMULÁRIOS E MANIPULAÇÃO DA INTERFACE ---
+// ==========================================
+// FORMULÁRIOS E INTERFACE DO USUÁRIO
+// ==========================================
 
 async function handleAddProduct(e) {
     e.preventDefault();
@@ -445,9 +479,6 @@ function showError(message) {
     if (errorDiv) {
         errorDiv.textContent = '❌ ' + message;
         errorDiv.style.display = 'block';
-        setTimeout(() => {
-            errorDiv.style.display = 'none';
-        }, 8000);
     }
 }
 
